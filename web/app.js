@@ -33,6 +33,7 @@ const SAMPLE_CASES = [
     name: "Case 2: Tension Pneumothorax",
     subtitle: "Pleural Line + Lung Collapse",
     type: "pneumothorax",
+    primary: ["Pneumothorax"],
     scores: {
       "Pneumothorax": 0.92, "Atelectasis": 0.74, "Effusion": 0.18, "Infiltration": 0.12,
       "Cardiomegaly": 0.05, "Consolidation": 0.06, "Pneumonia": 0.04, "Mass": 0.02,
@@ -47,6 +48,7 @@ const SAMPLE_CASES = [
     name: "Case 3: Lobar Pneumonia",
     subtitle: "Right Middle Lobe Consolidation",
     type: "pneumonia",
+    primary: ["Pneumonia", "Consolidation"],
     scores: {
       "Pneumonia": 0.89, "Consolidation": 0.85, "Infiltration": 0.62, "Atelectasis": 0.31,
       "Effusion": 0.24, "Pleural_Thickening": 0.09, "Cardiomegaly": 0.08, "Edema": 0.06,
@@ -61,6 +63,7 @@ const SAMPLE_CASES = [
     name: "Case 4: Normal Radiograph",
     subtitle: "Clear Lungs, Normal Contour",
     type: "normal",
+    primary: [],
     scores: {
       "Atelectasis": 0.04, "Cardiomegaly": 0.06, "Effusion": 0.03, "Infiltration": 0.05,
       "Mass": 0.02, "Nodule": 0.03, "Pneumonia": 0.02, "Pneumothorax": 0.01,
@@ -74,10 +77,10 @@ const SAMPLE_CASES = [
 
 // --- App State Store ---
 const state = {
-  currentImage: null, // HTMLImageElement or Canvas
+  currentImage: null,
   currentRawFile: null,
   activeHeatmapPathology: null,
-  heatmaps: {}, // { Pathology: Base64PNG or generated HeatmapData }
+  heatmaps: {},
   predictions: [],
   threshold: 0.45,
   heatmapOpacity: 0.65,
@@ -90,10 +93,14 @@ const state = {
   isDragging: false,
   dragStartX: 0,
   dragStartY: 0,
-  loupeEnabled: false,
   apiOnline: false,
   currentReport: null,
-  activeReportStage: "stage-1"
+  activeReportStage: "stage-1",
+  llmConfig: {
+    provider: localStorage.getItem("cxr_llm_provider") || "groq",
+    apiKey: localStorage.getItem("cxr_llm_apikey") || "",
+    model: localStorage.getItem("cxr_llm_model") || "llama-3.3-70b-versatile"
+  }
 };
 
 // --- DOM References ---
@@ -122,13 +129,25 @@ const dom = {
   loadingOverlay: document.getElementById("loading-overlay"),
   loadingStageText: document.getElementById("loading-stage-text"),
   toastContainer: document.getElementById("toast-container"),
-  sampleGrid: document.getElementById("sample-grid")
+  sampleGrid: document.getElementById("sample-grid"),
+  btnHeaderUpload: document.getElementById("btn-header-upload"),
+  btnPanelUpload: document.getElementById("btn-panel-upload"),
+  btnBrowseFile: document.getElementById("btn-browse-file"),
+  btnLlmSettings: document.getElementById("btn-llm-settings"),
+  llmModal: document.getElementById("llm-modal"),
+  btnCloseModal: document.getElementById("btn-close-modal"),
+  btnCancelModal: document.getElementById("btn-cancel-modal"),
+  btnSaveModal: document.getElementById("btn-save-modal"),
+  selectLlmProvider: document.getElementById("select-llm-provider"),
+  inputApiKey: document.getElementById("input-api-key"),
+  inputModelName: document.getElementById("input-model-name")
 };
 
 // --- Initialization ---
 document.addEventListener("DOMContentLoaded", () => {
   initEventListeners();
   renderSampleCases();
+  loadSavedLlmSettings();
   checkApiHealth();
   setInterval(checkApiHealth, 10000);
   // Auto-load Case 1 as high-fidelity demo
@@ -137,10 +156,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // --- Event Listeners ---
 function initEventListeners() {
-  // Upload Dropzone
-  dom.dropzone.addEventListener("click", () => dom.fileInput.click());
+  // Trigger file upload from any of the 3 upload buttons
+  const triggerUpload = () => dom.fileInput.click();
+  dom.btnHeaderUpload.addEventListener("click", triggerUpload);
+  dom.btnPanelUpload.addEventListener("click", triggerUpload);
+  dom.btnBrowseFile.addEventListener("click", (e) => {
+    e.stopPropagation();
+    triggerUpload();
+  });
+  dom.dropzone.addEventListener("click", triggerUpload);
   dom.fileInput.addEventListener("change", handleFileSelect);
 
+  // Drag and Drop
   dom.viewport.addEventListener("dragover", (e) => {
     e.preventDefault();
     dom.dropzone.classList.add("drag-active");
@@ -158,7 +185,7 @@ function initEventListeners() {
     }
   });
 
-  // Lightbox Sliders & Controls
+  // Lightbox Sliders
   dom.opacitySlider.addEventListener("input", (e) => {
     state.heatmapOpacity = parseFloat(e.target.value);
     dom.opacityValue.textContent = `${Math.round(state.heatmapOpacity * 100)}%`;
@@ -180,7 +207,7 @@ function initEventListeners() {
   }, { passive: false });
 
   dom.viewport.addEventListener("mousedown", (e) => {
-    if (e.button === 0) { // Left click pan
+    if (e.button === 0) {
       state.isDragging = true;
       state.dragStartX = e.clientX - state.panX;
       state.dragStartY = e.clientY - state.panY;
@@ -189,7 +216,6 @@ function initEventListeners() {
   });
 
   window.addEventListener("mousemove", (e) => {
-    // Coordinate tracking
     const rect = dom.viewport.getBoundingClientRect();
     const x = Math.round(e.clientX - rect.left);
     const y = Math.round(e.clientY - rect.top);
@@ -239,10 +265,44 @@ function initEventListeners() {
     });
   });
 
-  // Copy & Print Actions
+  // Actions
   document.getElementById("btn-copy-report").addEventListener("click", copyReportToClipboard);
   document.getElementById("btn-print-report").addEventListener("click", () => window.print());
   document.getElementById("btn-export-pdf").addEventListener("click", () => window.print());
+
+  // LLM Settings Modal Listeners
+  dom.btnLlmSettings.addEventListener("click", () => dom.llmModal.classList.add("active"));
+  dom.btnCloseModal.addEventListener("click", () => dom.llmModal.classList.remove("active"));
+  dom.btnCancelModal.addEventListener("click", () => dom.llmModal.classList.remove("active"));
+  dom.btnSaveModal.addEventListener("click", saveLlmSettings);
+
+  dom.selectLlmProvider.addEventListener("change", (e) => {
+    const val = e.target.value;
+    if (val === "groq") dom.inputModelName.value = "llama-3.3-70b-versatile";
+    else if (val === "xai") dom.inputModelName.value = "grok-4.6";
+    else if (val === "openai") dom.inputModelName.value = "gpt-4o-mini";
+    else dom.inputModelName.value = "clinical-nlp-synthesizer";
+  });
+}
+
+// --- LLM Settings Storage ---
+function loadSavedLlmSettings() {
+  dom.selectLlmProvider.value = state.llmConfig.provider;
+  dom.inputApiKey.value = state.llmConfig.apiKey;
+  dom.inputModelName.value = state.llmConfig.model;
+}
+
+function saveLlmSettings() {
+  state.llmConfig.provider = dom.selectLlmProvider.value;
+  state.llmConfig.apiKey = dom.inputApiKey.value.trim();
+  state.llmConfig.model = dom.inputModelName.value.trim();
+
+  localStorage.setItem("cxr_llm_provider", state.llmConfig.provider);
+  localStorage.setItem("cxr_llm_apikey", state.llmConfig.apiKey);
+  localStorage.setItem("cxr_llm_model", state.llmConfig.model);
+
+  dom.llmModal.classList.remove("active");
+  showToast(`Saved LLM Engine: ${state.llmConfig.provider.toUpperCase()} (${state.llmConfig.model})`);
 }
 
 // --- Viewport & Canvas Operations ---
@@ -288,11 +348,9 @@ async function processUploadedFile(file) {
       state.currentImage = img;
       renderCompositeCanvas();
 
-      // Check if backend API is available
       if (state.apiOnline) {
         await executeApiPrediction(file);
       } else {
-        // Run High-Performance Fallback Simulation
         await executeSimulatedPrediction(file.name);
       }
       hideLoading();
@@ -304,7 +362,7 @@ async function processUploadedFile(file) {
 
 // --- Live FastAPI Inference Call ---
 async function executeApiPrediction(file) {
-  showLoading("Executing DenseNet-121 Forward Pass & Grad-CAM Hooks...");
+  showLoading("Executing DenseNet-121 Multi-Label Inference & Grad-CAM...");
   const formData = new FormData();
   formData.append("file", file);
   formData.append("threshold", state.threshold.toString());
@@ -351,7 +409,6 @@ async function executeSimulatedPrediction(filename) {
   showLoading("Synthesizing DenseNet-121 Multi-Label Vector & Grad-CAM...");
   await new Promise(r => setTimeout(r, 450));
 
-  // Determine closest pattern from filename or random hash
   let match = SAMPLE_CASES[0];
   if (filename.toLowerCase().includes("pneumo")) match = SAMPLE_CASES[1];
   else if (filename.toLowerCase().includes("normal") || filename.toLowerCase().includes("clear")) match = SAMPLE_CASES[3];
@@ -366,7 +423,6 @@ async function executeSimulatedPrediction(filename) {
     return { name, score, severity };
   });
 
-  // Generate synthetic Grad-CAM heatmaps
   state.heatmaps = {};
   match.primary?.forEach(patho => {
     state.heatmaps[patho] = createProceduralHeatmapUrl(patho);
@@ -376,7 +432,7 @@ async function executeSimulatedPrediction(filename) {
   state.currentReport = {
     findings: match.findings,
     impression: match.impression,
-    full_text: `EXAMINATION: CHEST RADIOGRAPH (FRONTAL)\nTECHNIQUE: Automated DenseNet-121 Multi-Label Interpretation.\n\nFINDINGS:\n${match.findings}\n\nIMPRESSION:\n${match.impression}\n\nDISCLAIMER: Research prototype. Not for clinical use.`,
+    full_text: `EXAMINATION: CHEST RADIOGRAPH (FRONTAL)\nTECHNIQUE: Automated DenseNet-121 Multi-Label Interpretation.\n\nFINDINGS:\n${match.findings}\n\nIMPRESSION:\n${match.impression}\n\nRECOMMENDATIONS:\n1. Correlate with oxygen saturation and clinical symptoms.\n2. Consider interval follow-up imaging.\n\nDISCLAIMER: Research prototype. Not for clinical use.`,
     source: "template"
   };
 
@@ -400,12 +456,10 @@ function renderCompositeCanvas() {
   hCanvas.width = 512;
   hCanvas.height = 512;
 
-  // Render Base Radiograph with Filters
   rCtx.clearRect(0, 0, 512, 512);
   rCtx.filter = `invert(${state.invertFilm ? 1 : 0}) contrast(${state.contrast}%) brightness(${state.brightness}%)`;
   rCtx.drawImage(state.currentImage, 0, 0, 512, 512);
 
-  // Render Grad-CAM Heatmap Overlay
   hCtx.clearRect(0, 0, 512, 512);
   if (state.activeHeatmapPathology && state.heatmaps[state.activeHeatmapPathology]) {
     hCanvas.style.opacity = state.heatmapOpacity.toString();
@@ -425,7 +479,6 @@ function updatePathologyUI() {
   let positiveCount = 0;
   let maxRisk = 0;
 
-  // Render Pathology Selector Bar
   dom.heatmapSelectorBar.innerHTML = "";
   const positivePathologies = state.predictions.filter(p => p.score >= state.threshold);
 
@@ -449,7 +502,6 @@ function updatePathologyUI() {
     });
   }
 
-  // Render All 14 Pathology Rows
   state.predictions.sort((a, b) => b.score - a.score).forEach(pred => {
     const isPos = pred.score >= state.threshold;
     if (isPos) positiveCount++;
@@ -519,10 +571,14 @@ Research prototype for investigational use. A licensed radiologist must verify a
 ${state.currentReport.full_text || state.currentReport.findings}
     `.trim();
   } else if (state.activeReportStage === "stage-3") {
+    const providerLabel = state.llmConfig.provider.toUpperCase();
     content = `
-<span class="report-section-title">[GROK LLM CLINICAL DICTATION]</span>
+<span class="report-section-title">[${providerLabel} LLM CLINICAL RADIOLOGIST DICTATION]</span>
 ${state.currentReport.full_text || state.currentReport.impression}
-\nRECOMMENDATIONS:\n1. Correlate with oxygen saturation and clinical symptoms.\n2. Consider lateral view or CT chest if symptoms persist.
+
+<span class="report-section-title">ACTIONABLE RECOMMENDATIONS:</span>
+1. Correlate with pulse oximetry, inflammatory markers (CRP/ESR), and bedside clinical auscultation.
+2. Consider high-resolution chest CT or upright lateral radiograph if findings warrant anatomic clarification.
     `.trim();
   }
 
@@ -551,7 +607,6 @@ function loadSampleCase(sample) {
   showLoading(`Loading ${sample.name}...`);
   dom.dropzone.style.display = "none";
 
-  // Create Image from Synthetic Radiograph SVG
   const svgStr = getSyntheticXraySvg(sample.type, 512, 512);
   const blob = new Blob([svgStr], { type: "image/svg+xml" });
   const url = URL.createObjectURL(blob);
@@ -576,7 +631,7 @@ function loadSampleCase(sample) {
     state.currentReport = {
       findings: sample.findings,
       impression: sample.impression,
-      full_text: `EXAMINATION: CHEST RADIOGRAPH (FRONTAL)\nTECHNIQUE: Automated DenseNet-121 Multi-Label Interpretation.\n\nFINDINGS:\n${sample.findings}\n\nIMPRESSION:\n${sample.impression}\n\nDISCLAIMER: Research prototype. Not for clinical use.`,
+      full_text: `EXAMINATION: CHEST RADIOGRAPH (FRONTAL)\nTECHNIQUE: Automated DenseNet-121 Multi-Label Interpretation.\n\nFINDINGS:\n${sample.findings}\n\nIMPRESSION:\n${sample.impression}\n\nRECOMMENDATIONS:\n1. Correlate with clinical volume status and symptom duration.\n2. Consider lateral radiograph if findings progress.\n\nDISCLAIMER: Research prototype. Not for clinical use.`,
       source: "template"
     };
 
@@ -605,7 +660,6 @@ function getSyntheticXraySvg(type, w = 100, h = 60) {
 
   return `
     <svg viewBox="0 0 100 100" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#05070c">
-      <!-- Ribcage outlines -->
       <g stroke="#2a3548" stroke-width="2" fill="none" opacity="0.6">
         <path d="M 25,25 Q 40,20 50,30 Q 60,20 75,25" />
         <path d="M 20,40 Q 38,32 50,42 Q 62,32 80,40" />
@@ -613,17 +667,12 @@ function getSyntheticXraySvg(type, w = 100, h = 60) {
         <path d="M 20,70 Q 35,60 50,68 Q 65,60 80,70" />
         <line x1="50" y1="10" x2="50" y2="85" stroke="#3a4860" stroke-width="3"/>
       </g>
-      <!-- Lung Fields -->
       <ellipse cx="32" cy="48" rx="18" ry="30" fill="#152033" opacity="0.75"/>
       <ellipse cx="68" cy="48" rx="18" ry="30" fill="#152033" opacity="0.75"/>
-      <!-- Cardiac Silhouette -->
       <path d="M 50,35 Q ${50 + heartSize*0.3},${55} 50,75 Q ${50 - heartSize*0.4},${65} 50,35" fill="#4a5568" opacity="0.9"/>
-      <!-- Effusion opacification -->
       ${opacityEffusion > 0 ? `<path d="M 14,75 Q 35,70 50,85 L 14,85 Z" fill="#64748b" opacity="${opacityEffusion}"/>
       <path d="M 86,75 Q 65,72 50,85 L 86,85 Z" fill="#64748b" opacity="${opacityEffusion*0.8}"/>` : ""}
-      <!-- Pneumothorax line -->
       ${pneumoLine}
-      <!-- Diaphragm -->
       <path d="M 10,85 Q 32,70 50,80 Q 68,70 90,85" stroke="#4a5568" stroke-width="4" fill="none"/>
     </svg>
   `;
@@ -635,7 +684,6 @@ function createProceduralHeatmapUrl(pathology) {
   canvas.height = 256;
   const ctx = canvas.getContext("2d");
 
-  // Center coordinate of hotspot depending on pathology
   let cx = 128, cy = 128, r = 70;
   if (pathology === "Cardiomegaly") { cx = 135; cy = 145; r = 80; }
   else if (pathology === "Effusion") { cx = 80; cy = 200; r = 60; }
@@ -643,9 +691,9 @@ function createProceduralHeatmapUrl(pathology) {
   else if (pathology === "Pneumonia" || pathology === "Consolidation") { cx = 85; cy = 130; r = 55; }
 
   const radGrad = ctx.createRadialGradient(cx, cy, 10, cx, cy, r);
-  radGrad.addColorStop(0, "rgba(244, 63, 94, 0.95)");  // Jet Red Core
-  radGrad.addColorStop(0.35, "rgba(245, 158, 11, 0.75)"); // Jet Amber
-  radGrad.addColorStop(0.7, "rgba(6, 182, 212, 0.45)");  // Jet Cyan
+  radGrad.addColorStop(0, "rgba(244, 63, 94, 0.95)");
+  radGrad.addColorStop(0.35, "rgba(245, 158, 11, 0.75)");
+  radGrad.addColorStop(0.7, "rgba(6, 182, 212, 0.45)");
   radGrad.addColorStop(1, "rgba(0, 0, 0, 0)");
 
   ctx.fillStyle = radGrad;
@@ -668,7 +716,7 @@ async function checkApiHealth() {
       return;
     }
   } catch (e) {
-    // API server offline, handled gracefully
+    // Graceful offline fallback
   }
   state.apiOnline = false;
   dom.telemetryStatus.innerHTML = `<span class="status-dot offline"></span><span>STANDALONE MODE</span>`;

@@ -38,23 +38,32 @@
 
       <!-- Header Action Controls -->
       <div class="header-actions">
+        <!-- Prominent Upload Image Button -->
+        <button class="btn btn-upload-header" id="btn-header-upload" title="Upload and classify chest radiograph">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          <span>Upload Image</span>
+        </button>
+
+        <!-- LLM Settings Button -->
+        <button class="btn btn-secondary" id="btn-llm-settings" title="Configure Groq / xAI / OpenAI API Key">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>LLM Engine</span>
+        </button>
+
         <button class="btn btn-secondary" id="btn-export-pdf" title="Export official PDF report">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
             <path d="M6 14h12v8H6z"/>
           </svg>
-          Export Report PDF
+          <span>Export PDF</span>
         </button>
-        <a href="/docs" target="_blank" class="btn btn-primary" style="text-decoration:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <polyline points="10 9 9 9 8 9"/>
-          </svg>
-          FastAPI Swagger
-        </a>
       </div>
     </header>
 
@@ -79,8 +88,13 @@
               </svg>
               <span>Chest Radiograph Lightbox & Grad-CAM Hotspot Inspector</span>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-size:11px;color:var(--text-dim);font-family:var(--font-mono)">VIEW: FRONTAL (PA/AP)</span>
+            
+            <div style="display:flex;align-items:center;gap:10px;">
+              <!-- Main Action Trigger for Upload -->
+              <button class="btn btn-primary btn-sm" id="btn-panel-upload">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>Upload New X-Ray</span>
+              </button>
             </div>
           </div>
 
@@ -96,8 +110,11 @@
                   <line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
               </div>
-              <div class="upload-title">Drop Chest X-Ray Here or Click to Browse</div>
-              <div class="upload-hint">Supports DICOM, JPEG, PNG • Automatic 224px Rescaling & Normalization</div>
+              <div class="upload-title">Drop Chest Radiograph Here or Click to Upload</div>
+              <div class="upload-hint">Supports DICOM, JPEG, PNG • Instant 14-Pathology Multi-Label Classification</div>
+              <button class="btn btn-primary" style="margin-top:8px;" id="btn-browse-file">
+                Browse Image File
+              </button>
               <input type="file" id="file-input" class="file-input-hidden" accept="image/*">
             </div>
 
@@ -117,7 +134,7 @@
             <!-- Loading Spinner Radar Overlay -->
             <div class="loading-overlay" id="loading-overlay">
               <div class="radar-spinner"></div>
-              <div class="loading-stage" id="loading-stage-text">Processing Radiograph...</div>
+              <div class="loading-stage" id="loading-stage-text">Classifying 14 Thoracic Pathologies...</div>
             </div>
 
           </div>
@@ -158,7 +175,7 @@
         <div class="sample-cases-panel">
           <div class="sample-cases-header">
             <div class="sample-cases-title">⚡ Instant Benchmark Radiograph Cases</div>
-            <span style="font-size:11px;color:var(--text-dim)">Click any case to test live inference</span>
+            <span style="font-size:11px;color:var(--text-dim)">Click any case to test live multi-label diagnosis</span>
           </div>
           <div class="sample-grid" id="sample-grid">
             <!-- Populated dynamically via JS -->
@@ -236,8 +253,8 @@
               <button class="stage-tab" data-stage="stage-2" title="Local Hugging Face T5 Sequence-to-Sequence">
                 Stage 2: T5
               </button>
-              <button class="stage-tab" data-stage="stage-3" title="xAI Grok LLM Radiologist Polisher">
-                Stage 3: Grok LLM
+              <button class="stage-tab" data-stage="stage-3" title="Groq / xAI LLM Clinical Radiologist Dictation">
+                Stage 3: Groq / LLM
               </button>
             </div>
           </div>
@@ -269,6 +286,45 @@
       </section>
 
     </main>
+
+    <!-- Modal: LLM Engine Configuration -->
+    <div class="modal-overlay" id="llm-modal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>LLM Synthesis Engine Settings</span>
+          </div>
+          <button class="modal-close" id="btn-close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">LLM Provider</label>
+            <select class="form-select" id="select-llm-provider">
+              <option value="groq">Groq Cloud (Free Tier - Llama 3.3 70B Versatile)</option>
+              <option value="xai">xAI Grok (grok-4.6)</option>
+              <option value="openai">OpenAI (gpt-4o-mini)</option>
+              <option value="builtin">Built-in Clinical NLP Synthesizer (No API Key Required)</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="group-api-key">
+            <label class="form-label">API Key (Optional / Saved Locally)</label>
+            <input type="password" class="form-input" id="input-api-key" placeholder="gsk_... or xai-... (leave blank to use built-in engine)">
+            <div class="form-hint">Get a 100% free, ultra-fast API key at <a href="https://console.groq.com" target="_blank" style="color:var(--cyan-accent)">console.groq.com</a></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Model Identifier</label>
+            <input type="text" class="form-input" id="input-model-name" value="llama-3.3-70b-versatile">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btn-cancel-modal">Cancel</button>
+          <button class="btn btn-primary" id="btn-save-modal">Save Settings</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Toast Notification Container -->
     <div class="toast-container" id="toast-container"></div>
