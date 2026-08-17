@@ -1,0 +1,44 @@
+seed: 42
+output_dir: outputs
+checkpoint_dir: checkpoints
+
+data:
+  root: data/nih
+  image_dir: data/nih/images_224
+  manifest: data/nih/manifest.csv
+  image_size: 224
+  num_workers: 4
+  # Official NIH patient-wise split. val is carved from train_val by patient.
+  val_fraction: 0.1
+
+model:
+  name: densenet121
+  pretrained: imagenet   # imagenet | none
+  dropout: 0.2
+
+train:
+  epochs: 12
+  batch_size: 16          # RTX 4060 8 GB, AMP, 224 px
+  accum_steps: 2          # effective batch 32
+  lr: 0.0001
+  weight_decay: 0.00001
+  warmup_epochs: 1
+  min_lr: 0.000001
+  amp: true
+  clip_grad: 1.0
+  early_stop_patience: 4
+  # Weighted BCE fights the extreme class imbalance (Hernia is ~0.16%).
+  use_pos_weight: true
+  # Unfreeze the whole network after this many epochs of classifier-only training.
+  freeze_backbone_epochs: 1
+
+eval:
+  batch_size: 32
+  threshold: 0.5
+
+serve:
+  host: 0.0.0.0
+  port: 8000
+  max_batch: 8
+  max_delay_ms: 12
+  threshold: 0.45

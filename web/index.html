@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CXR-Diagnostic™ | Thoracic AI PACS & Radiology Report Synthesis</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🫁</text></svg>">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- PACS Header Navigation -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            <circle cx="12" cy="12" r="10"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>CXR-Diagnostic™ <span class="brand-badge">Clinical v1.0</span></h1>
+          <div class="brand-subtitle">DenseNet-121 Multi-Pathology Diagnostic & Automated Radiology Report Generator</div>
+        </div>
+      </div>
+
+      <!-- Telemetry Status Pills -->
+      <div class="header-telemetry">
+        <div class="telemetry-pill" id="telemetry-status">
+          <span class="status-dot"></span>
+          <span>CHECKING API...</span>
+        </div>
+        <div class="telemetry-pill" id="telemetry-device">
+          <span>DEVICE: CUDA / CPU</span>
+        </div>
+      </div>
+
+      <!-- Header Action Controls -->
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="btn-export-pdf" title="Export official PDF report">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <path d="M6 14h12v8H6z"/>
+          </svg>
+          Export Report PDF
+        </button>
+        <a href="/docs" target="_blank" class="btn btn-primary" style="text-decoration:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          FastAPI Swagger
+        </a>
+      </div>
+    </header>
+
+    <!-- Main PACS Workstation Workspace -->
+    <main class="workstation-grid">
+      
+      <!-- Left Column: Radiograph Viewer & Hotspot Inspector -->
+      <section class="pacs-column">
+        
+        <div class="pacs-panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                <line x1="7" y1="2" x2="7" y2="22"/>
+                <line x1="17" y1="2" x2="17" y2="22"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <line x1="2" y1="7" x2="7" y2="7"/>
+                <line x1="2" y1="17" x2="7" y2="17"/>
+                <line x1="17" y1="17" x2="22" y2="17"/>
+                <line x1="17" y1="7" x2="22" y2="7"/>
+              </svg>
+              <span>Chest Radiograph Lightbox & Grad-CAM Hotspot Inspector</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:11px;color:var(--text-dim);font-family:var(--font-mono)">VIEW: FRONTAL (PA/AP)</span>
+            </div>
+          </div>
+
+          <!-- Interactive Lightbox Viewport -->
+          <div class="lightbox-viewport" id="lightbox-viewport">
+            
+            <!-- Upload Dropzone (Overlaid when empty) -->
+            <div class="upload-dropzone" id="upload-dropzone">
+              <div class="upload-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+              </div>
+              <div class="upload-title">Drop Chest X-Ray Here or Click to Browse</div>
+              <div class="upload-hint">Supports DICOM, JPEG, PNG • Automatic 224px Rescaling & Normalization</div>
+              <input type="file" id="file-input" class="file-input-hidden" accept="image/*">
+            </div>
+
+            <!-- Canvas Render Layer Stack -->
+            <div class="canvas-wrapper" id="canvas-wrapper">
+              <canvas id="radiograph-canvas" class="radiograph-canvas"></canvas>
+              <canvas id="heatmap-canvas" class="heatmap-canvas"></canvas>
+            </div>
+
+            <!-- Anatomical HUD -->
+            <div class="lightbox-hud">
+              <div class="hud-pill" id="hud-coords">X:256 Y:256</div>
+              <div class="hud-pill" id="hud-zone">Cardiomediastinal Zone</div>
+            </div>
+            <div class="hud-scale" id="hud-scale">100%</div>
+
+            <!-- Loading Spinner Radar Overlay -->
+            <div class="loading-overlay" id="loading-overlay">
+              <div class="radar-spinner"></div>
+              <div class="loading-stage" id="loading-stage-text">Processing Radiograph...</div>
+            </div>
+
+          </div>
+
+          <!-- Lightbox Toolbar Controls -->
+          <div class="lightbox-toolbar">
+            <div class="tool-group">
+              <span class="tool-label">View:</span>
+              <button class="btn-tool" id="btn-zoom-in" title="Zoom In (+)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+              </button>
+              <button class="btn-tool" id="btn-zoom-out" title="Zoom Out (-)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+              </button>
+              <button class="btn-tool" id="btn-reset-view" title="Reset Scale & Pan">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              </button>
+              <button class="btn-tool" id="btn-invert-film" title="Toggle Inverted Negative Film Mode">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"/></svg>
+              </button>
+            </div>
+
+            <!-- Heatmap Opacity Blend Slider -->
+            <div class="slider-control">
+              <span class="tool-label">Heatmap Opacity:</span>
+              <input type="range" id="opacity-slider" min="0" max="1" step="0.05" value="0.65">
+              <span id="opacity-value">65%</span>
+            </div>
+          </div>
+
+          <!-- Dynamic Pathology Heatmap Selector Tabs -->
+          <div class="heatmap-selector-bar" id="heatmap-selector-bar">
+            <!-- Populated dynamically with detected pathologies -->
+          </div>
+        </div>
+
+        <!-- Benchmark Clinical Test Cases Strip -->
+        <div class="sample-cases-panel">
+          <div class="sample-cases-header">
+            <div class="sample-cases-title">⚡ Instant Benchmark Radiograph Cases</div>
+            <span style="font-size:11px;color:var(--text-dim)">Click any case to test live inference</span>
+          </div>
+          <div class="sample-grid" id="sample-grid">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Right Column: Multilabel Spectrum & Automated Reports -->
+      <section class="diagnostic-column">
+        
+        <!-- Top Metrics Overview Box -->
+        <div class="stats-row">
+          <div class="stat-box">
+            <div class="stat-label">Inference Latency</div>
+            <div class="stat-value highlight" id="stat-latency">118 ms</div>
+            <div class="stat-sub">DynamicBatcher Active</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Pathologies Detected</div>
+            <div class="stat-value" id="stat-positives">2</div>
+            <div class="stat-sub">Above Threshold</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Peak Pathology Score</div>
+            <div class="stat-value highlight" id="stat-max-risk">94%</div>
+            <div class="stat-sub">Primary Concern</div>
+          </div>
+        </div>
+
+        <!-- 14 Pathology Probability Spectrum Panel -->
+        <div class="pathology-panel">
+          <div class="pathology-header">
+            <div class="panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="20" x2="18" y2="10"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+              <span>14 Thoracic Pathologies (CheXNet-14)</span>
+            </div>
+
+            <!-- Detection Threshold Interactive Slider -->
+            <div class="threshold-wrapper">
+              <span class="threshold-label">Threshold:</span>
+              <input type="range" id="threshold-slider" min="0.1" max="0.9" step="0.05" value="0.45">
+              <span class="threshold-value" id="threshold-value">0.45</span>
+            </div>
+          </div>
+
+          <!-- All 14 Pathology Meters List -->
+          <div class="pathology-list" id="pathology-list">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+        <!-- 3-Stage Radiology Report Synthesizer Panel -->
+        <div class="report-panel">
+          <div class="report-header">
+            <div class="panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+              <span>Automated Radiology Report Synthesis</span>
+            </div>
+
+            <!-- 3-Stage Generation View Tabs -->
+            <div class="stage-tabs">
+              <button class="stage-tab active" data-stage="stage-1" title="Deterministic Rule-Based Clinical Findings & Impression">
+                Stage 1: Clinical Draft
+              </button>
+              <button class="stage-tab" data-stage="stage-2" title="Local Hugging Face T5 Sequence-to-Sequence">
+                Stage 2: T5
+              </button>
+              <button class="stage-tab" data-stage="stage-3" title="xAI Grok LLM Radiologist Polisher">
+                Stage 3: Grok LLM
+              </button>
+            </div>
+          </div>
+
+          <!-- Structured Report Body Content -->
+          <div class="report-body" id="report-body">
+            <!-- Populated via JS -->
+          </div>
+
+          <!-- Report Action Controls -->
+          <div class="report-actions">
+            <button class="btn btn-secondary" id="btn-copy-report">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              Copy Report
+            </button>
+            <button class="btn btn-primary" id="btn-print-report">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                <path d="M6 14h12v8H6z"/>
+              </svg>
+              Print / Save PDF
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
