@@ -13,8 +13,8 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOME=/home/appuser \
-    TORCH_HOME=/app/data/torch_cache \
-    CXR_DB_PATH=/app/data/cxr_clinical.db \
+    TORCH_HOME=/app/storage/torch_cache \
+    CXR_DB_PATH=/app/storage/cxr_clinical.db \
     CXR_ENSEMBLE_MODE=full \
     GEMINI_FLASH_MODEL=gemini-3.5-flash-lite \
     GROQ_LLM_MODEL=openai/gpt-oss-20b
@@ -37,9 +37,9 @@ RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create non-root app user & persistent data/cache directories
+# Create non-root app user & persistent storage/cache directories (separate from /app/data/benchmark_test_set)
 RUN groupadd -r appuser && useradd -r -g appuser -m appuser \
-    && mkdir -p /app/data/torch_cache /app/outputs/benchmark_results /home/appuser/.torchxrayvision
+    && mkdir -p /app/storage/torch_cache /app/outputs/benchmark_results /home/appuser/.torchxrayvision
 
 # Copy application source, configs, benchmark samples, evaluation report & compiled SPA
 COPY api/ ./api/

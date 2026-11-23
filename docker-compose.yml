@@ -12,12 +12,13 @@ services:
     env_file:
       - .env
     environment:
-      - CXR_DB_PATH=/app/data/cxr_clinical.db
+      - CXR_DB_PATH=/app/storage/cxr_clinical.db
+      - TORCH_HOME=/app/storage/torch_cache
       - CXR_ENSEMBLE_MODE=full
       - GEMINI_FLASH_MODEL=gemini-3.5-flash-lite
       - GROQ_LLM_MODEL=openai/gpt-oss-20b
     volumes:
-      - ./data:/app/data
+      - ./storage:/app/storage
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
