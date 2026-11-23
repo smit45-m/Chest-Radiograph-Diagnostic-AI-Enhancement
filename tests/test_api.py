@@ -108,3 +108,68 @@ def test_predict_invalid_image(mock_pipeline):
             data={"threshold": "0.45"},
         )
         assert response.status_code == 400
+
+
+def test_samples_endpoint():
+    """GET /api/v1/samples returns available benchmark cases."""
+    with TestClient(app) as client:
+        response = client.get("/api/v1/samples")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) > 0
+        assert "filename" in data[0]
+
+
+def test_predict_heatmap_endpoint(mock_pipeline, dummy_image_bytes):
+    """POST /api/v1/predict/heatmap returns on-demand Grad-CAM heatmap."""
+    mock_pipeline.generate_single_heatmap.return_value = {
+        "pathology": "Pneumonia",
+        "image_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    }
+    with TestClient(app) as client:
+        app.state.pipeline = mock_pipeline
+        response = client.post(
+            "/api/v1/predict/heatmap",
+            files={"file": ("xray.jpg", dummy_image_bytes, "image/jpeg")},
+            data={"pathology": "Pneumonia"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["pathology"] == "Pneumonia"
+        assert len(data["image_base64"]) > 0
+
+
+
+def test_telemetry_and_graphify_endpoints():
+    """GET /api/v1/telemetry, POST /api/v1/telemetry/event, and GET /api/v1/graphify work properly."""
+    with TestClient(app) as client:
+        # 1. Telemetry summary
+        res_tel = client.get("/api/v1/telemetry")
+        assert res_tel.status_code == 200
+        tel_data = res_tel.json()
+        assert "latency_p95_ms" in tel_data
+        assert "recent_spans" in tel_data
+
+        # 2. Ingest client Sentry span
+        res_ev = client.post(
+            "/api/v1/telemetry/event",
+            json={
+                "kind": "span",
+                "op": "ui.curtain.scrub",
+                "description": "User scrubbed Watermelon UI split-curtain",
+                "duration_ms": 4.2,
+                "level": "info",
+                "tags": {"split": 50},
+            },
+        )
+        assert res_ev.status_code == 200
+        assert res_ev.json()["status"] == "recorded"
+
+        # 3. Graphify knowledge graph payload
+        res_graph = client.get("/api/v1/graphify")
+        assert res_graph.status_code == 200
+        graph_data = res_graph.json()
+        assert graph_data["schema_version"] == "graphify-2.0"
+        assert len(graph_data["clinical_graph"]["nodes"]) >= 20
+        assert len(graph_data["architecture_graph"]["nodes"]) >= 10

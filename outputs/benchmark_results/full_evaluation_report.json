@@ -1,0 +1,516 @@
+{
+  "generated_at": "2026-11-23T21:40:41Z",
+  "device": "cuda",
+  "gpu_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "threshold": 0.5,
+  "cases_evaluated": 6,
+  "total_pathology_judgments": 84,
+  "headline_metrics": {
+    "accuracy": 0.9167,
+    "sensitivity": 0.5556,
+    "specificity": 0.96,
+    "precision": 0.625,
+    "f1_score": 0.5882,
+    "micro_roc_auc": 0.8741,
+    "macro_roc_auc": 0.8,
+    "micro_pr_auc": 0.5764,
+    "macro_pr_auc": 0.65,
+    "brier_score": 0.0759,
+    "ece": 0.1024,
+    "confusion": {
+      "tp": 5,
+      "tn": 72,
+      "fp": 3,
+      "fn": 4,
+      "total": 84
+    },
+    "per_class": [
+      {
+        "pathology": "Atelectasis",
+        "roc_auc": 1.0,
+        "pr_auc": 1.0,
+        "sensitivity": 1.0,
+        "specificity": 1.0,
+        "support": 1
+      },
+      {
+        "pathology": "Cardiomegaly",
+        "roc_auc": 1.0,
+        "pr_auc": 1.0,
+        "sensitivity": 1.0,
+        "specificity": 0.8,
+        "support": 1
+      },
+      {
+        "pathology": "Infiltration",
+        "roc_auc": 0.2,
+        "pr_auc": 0.2,
+        "sensitivity": 0.0,
+        "specificity": 0.8,
+        "support": 1
+      },
+      {
+        "pathology": "Mass",
+        "roc_auc": 1.0,
+        "pr_auc": 1.0,
+        "sensitivity": 1.0,
+        "specificity": 1.0,
+        "support": 2
+      },
+      {
+        "pathology": "Nodule",
+        "roc_auc": 0.8,
+        "pr_auc": 0.5,
+        "sensitivity": 1.0,
+        "specificity": 0.8,
+        "support": 1
+      },
+      {
+        "pathology": "Pneumonia",
+        "roc_auc": 0.8,
+        "pr_auc": 0.5,
+        "sensitivity": 0.0,
+        "specificity": 1.0,
+        "support": 1
+      },
+      {
+        "pathology": "Consolidation",
+        "roc_auc": 0.8,
+        "pr_auc": 0.5,
+        "sensitivity": 0.0,
+        "specificity": 1.0,
+        "support": 1
+      },
+      {
+        "pathology": "Fibrosis",
+        "roc_auc": 0.8,
+        "pr_auc": 0.5,
+        "sensitivity": 0.0,
+        "specificity": 1.0,
+        "support": 1
+      }
+    ]
+  },
+  "backbone_comparison": {
+    "densenet121_all": {
+      "accuracy": 0.9524,
+      "micro_roc_auc": 0.9141,
+      "macro_roc_auc": 0.95,
+      "micro_pr_auc": 0.7963,
+      "sensitivity": 0.7778,
+      "specificity": 0.9733,
+      "precision": 0.7778,
+      "f1_score": 0.7778,
+      "brier_score": 0.0895,
+      "ece": 0.1564
+    },
+    "densenet121_nih": {
+      "accuracy": 0.8929,
+      "micro_roc_auc": 0.837,
+      "macro_roc_auc": 0.775,
+      "micro_pr_auc": 0.6836,
+      "sensitivity": 0.5556,
+      "specificity": 0.9333,
+      "precision": 0.5,
+      "f1_score": 0.5263,
+      "brier_score": 0.1128,
+      "ece": 0.2071
+    },
+    "resnet50_512": {
+      "accuracy": 0.9048,
+      "micro_roc_auc": 0.7511,
+      "macro_roc_auc": 0.65,
+      "micro_pr_auc": 0.4132,
+      "sensitivity": 0.4444,
+      "specificity": 0.96,
+      "precision": 0.5714,
+      "f1_score": 0.5,
+      "brier_score": 0.0913,
+      "ece": 0.1078
+    },
+    "cnn_ensemble_3x": {
+      "accuracy": 0.9286,
+      "micro_roc_auc": 0.8741,
+      "macro_roc_auc": 0.825,
+      "micro_pr_auc": 0.693,
+      "sensitivity": 0.5556,
+      "specificity": 0.9733,
+      "precision": 0.7143,
+      "f1_score": 0.625,
+      "brier_score": 0.0733,
+      "ece": 0.1033
+    },
+    "gemini_decision_1": {
+      "accuracy": 0.869,
+      "micro_roc_auc": 0.7333,
+      "macro_roc_auc": 0.7344,
+      "micro_pr_auc": 0.386,
+      "sensitivity": 0.2222,
+      "specificity": 0.9467,
+      "precision": 0.3333,
+      "f1_score": 0.2667,
+      "brier_score": 0.1187,
+      "ece": 0.1931
+    },
+    "fused_consensus": {
+      "accuracy": 0.9167,
+      "micro_roc_auc": 0.8741,
+      "macro_roc_auc": 0.8,
+      "micro_pr_auc": 0.5764,
+      "sensitivity": 0.5556,
+      "specificity": 0.96,
+      "precision": 0.625,
+      "f1_score": 0.5882,
+      "brier_score": 0.0759,
+      "ece": 0.1024
+    }
+  },
+  "latency_sla": {
+    "avg_vision_ms": 327.7,
+    "avg_gradcam_ms": 104.2,
+    "avg_core_gpu_ms": 431.9,
+    "avg_decision_1_ms": 1095.8,
+    "avg_report_synthesis_ms": 15037.8
+  },
+  "ai_verification": {
+    "gemini_decision_active_cases": 6,
+    "live_gemini_transcripts": 0,
+    "total_cases": 6,
+    "flash_model": "gemini-3.5-flash-lite",
+    "decision_model": "gemini-decision-1"
+  },
+  "cases": [
+    {
+      "case_id": "CASE-01",
+      "name": "NIH Case: Cardiomegaly",
+      "filename": "nih_cardiomegaly_00000001.png",
+      "ground_truth": [
+        "Cardiomegaly"
+      ],
+      "detected": [
+        "Cardiomegaly"
+      ],
+      "top_predictions": [
+        {
+          "name": "Cardiomegaly",
+          "score": 0.8075,
+          "gemini_decision_score": 0.7867
+        },
+        {
+          "name": "Infiltration",
+          "score": 0.4028,
+          "gemini_decision_score": 0.4261
+        },
+        {
+          "name": "Effusion",
+          "score": 0.3395,
+          "gemini_decision_score": 0.3687
+        },
+        {
+          "name": "Pleural_Thickening",
+          "score": 0.3198,
+          "gemini_decision_score": 0.2818
+        }
+      ],
+      "match": "EXACT_MATCH",
+      "ctr": 0.529,
+      "ctr_status": "Borderline (0.50\u20130.53)",
+      "lung_symmetry_ratio": 0.97,
+      "gradcam_zone": "Cardiomediastinal Silhouette",
+      "decision_1_active": true,
+      "decision_1_triage": "STAT_CRITICAL",
+      "decision_1_view": "PA_UPRIGHT",
+      "decision_1_quality": 2.96,
+      "report_source": "clinical-nlp",
+      "triage_level": "STAT_CRITICAL",
+      "impression": "1. CARDIOMEGALY (Moderate, score 0.81) consistent with cardiopulmonary congestion / cardiomegaly.\nFindings most suggestive of Cardiomegaly. Clinical correlation is recommended.",
+      "dictation_transcript": "Frontal chest radiograph for this 68-year-old female patient in Inpatient Cardiology Service demonstrates cardiomegaly (81% confidence). Peak Grad-CAM++ activation localizes to the Cardiomediastinal Silhouette. Automated anatomical segmentation measures a cardiothoracic ratio of 0.53 (Borderline (0.50\u20130.53)). Prompt clinical correlation and guideline-directed management are recommended.",
+      "recommendations": "1. Assess volume status, serum NT-proBNP / troponin, and obtain 2D echocardiography per ACC/AHA guidelines to evaluate ventricular function.",
+      "timings": {
+        "vision_ms": 171.17,
+        "gradcam_ms": 67.88,
+        "core_total_ms": 239.05,
+        "decision_api_ms": 1628.6,
+        "report_ms": 14884.87,
+        "total_ms": 16601.72
+      }
+    },
+    {
+      "case_id": "CASE-02",
+      "name": "Clinical Case: Pulmonary Nodule & Mass",
+      "filename": "benchmark_nodule_mass.jpg",
+      "ground_truth": [
+        "Nodule",
+        "Mass"
+      ],
+      "detected": [
+        "Nodule",
+        "Mass",
+        "Infiltration"
+      ],
+      "top_predictions": [
+        {
+          "name": "Nodule",
+          "score": 0.6561,
+          "gemini_decision_score": 0.3213
+        },
+        {
+          "name": "Mass",
+          "score": 0.5936,
+          "gemini_decision_score": 0.4137
+        },
+        {
+          "name": "Infiltration",
+          "score": 0.5912,
+          "gemini_decision_score": 0.7402
+        },
+        {
+          "name": "Pneumonia",
+          "score": 0.3698,
+          "gemini_decision_score": 0.3628
+        }
+      ],
+      "match": "EXACT_MATCH",
+      "ctr": 0.561,
+      "ctr_status": "Enlarged (>0.53 \u2014 Cardiomegaly range)",
+      "lung_symmetry_ratio": 0.988,
+      "gradcam_zone": "Left Lung \u2014 Mid Zone",
+      "decision_1_active": true,
+      "decision_1_triage": "URGENT",
+      "decision_1_view": "SUBOPTIMAL",
+      "decision_1_quality": 2.55,
+      "report_source": "clinical-nlp",
+      "triage_level": "URGENT",
+      "impression": "1. Thoracic NODULE (Moderate, score 0.66). Indeterminate etiology; requires guideline-directed evaluation.\n2. Thoracic MASS (Mild, score 0.59). Indeterminate etiology; requires guideline-directed evaluation.\n3. Infiltration (mild, score 0.59).\nMulti-pathology study. Leading considerations: Nodule, Mass, Infiltration. Correlate with symptoms, labs, and prior imaging.",
+      "dictation_transcript": "Frontal chest radiograph for this 64-year-old male patient in Pulmonology Outpatient Clinic demonstrates nodule (66% confidence), mass (59% confidence), infiltration (59% confidence). Peak Grad-CAM++ activation localizes to the Left Lung \u2014 Mid Zone. Automated anatomical segmentation measures a cardiothoracic ratio of 0.56 (Enlarged (>0.53 \u2014 Cardiomegaly range)). Prompt clinical correlation and guideline-directed management are recommended.",
+      "recommendations": "1. Initiate guideline-directed antimicrobial therapy per ATS/IDSA recommendations. Recommend interval follow-up chest radiograph in 4 to 6 weeks to document radiographic resolution.\n2. Recommend dedicated contrast-enhanced thin-slice chest CT per Fleischner Society 2017 guidelines for nodule/mass risk stratification.",
+      "timings": {
+        "vision_ms": 308.12,
+        "gradcam_ms": 188.2,
+        "core_total_ms": 496.32,
+        "decision_api_ms": 1070.24,
+        "report_ms": 22353.74,
+        "total_ms": 23632.34
+      }
+    },
+    {
+      "case_id": "CASE-03",
+      "name": "NIH Case: Thoracic Mass & Consolidation",
+      "filename": "nih_sample_00027426.png",
+      "ground_truth": [
+        "Mass",
+        "Consolidation"
+      ],
+      "detected": [
+        "Nodule",
+        "Mass"
+      ],
+      "top_predictions": [
+        {
+          "name": "Nodule",
+          "score": 0.667,
+          "gemini_decision_score": 0.767
+        },
+        {
+          "name": "Mass",
+          "score": 0.6224,
+          "gemini_decision_score": 0.2222
+        },
+        {
+          "name": "Infiltration",
+          "score": 0.3436,
+          "gemini_decision_score": 0.39
+        },
+        {
+          "name": "Fibrosis",
+          "score": 0.2649,
+          "gemini_decision_score": 0.1877
+        }
+      ],
+      "match": "PARTIAL_MATCH",
+      "ctr": 0.381,
+      "ctr_status": "Normal (<0.50)",
+      "lung_symmetry_ratio": 0.915,
+      "gradcam_zone": "Left Lung \u2014 Mid Zone",
+      "decision_1_active": true,
+      "decision_1_triage": "URGENT",
+      "decision_1_view": "PA_UPRIGHT",
+      "decision_1_quality": 3.27,
+      "report_source": "clinical-nlp",
+      "triage_level": "URGENT",
+      "impression": "1. Thoracic NODULE (Moderate, score 0.67). Indeterminate etiology; requires guideline-directed evaluation.\n2. Thoracic MASS (Mild, score 0.62). Indeterminate etiology; requires guideline-directed evaluation.\nMulti-pathology study. Leading considerations: Nodule, Mass. Correlate with symptoms, labs, and prior imaging.",
+      "dictation_transcript": "Frontal chest radiograph for this 58-year-old female patient in Emergency Department (ED) demonstrates nodule (67% confidence), mass (62% confidence). Peak Grad-CAM++ activation localizes to the Left Lung \u2014 Mid Zone. Automated anatomical segmentation measures a cardiothoracic ratio of 0.38 (Normal (<0.50)). Prompt clinical correlation and guideline-directed management are recommended.",
+      "recommendations": "1. Recommend dedicated contrast-enhanced thin-slice chest CT per Fleischner Society 2017 guidelines for nodule/mass risk stratification.",
+      "timings": {
+        "vision_ms": 455.75,
+        "gradcam_ms": 103.38,
+        "core_total_ms": 559.13,
+        "decision_api_ms": 933.61,
+        "report_ms": 7526.12,
+        "total_ms": 8568.85
+      }
+    },
+    {
+      "case_id": "CASE-04",
+      "name": "Clinical Case: Atelectasis & Fibrosis",
+      "filename": "benchmark_pneumonia.jpg",
+      "ground_truth": [
+        "Atelectasis",
+        "Fibrosis"
+      ],
+      "detected": [
+        "Atelectasis",
+        "Cardiomegaly"
+      ],
+      "top_predictions": [
+        {
+          "name": "Atelectasis",
+          "score": 0.6299,
+          "gemini_decision_score": 0.4122
+        },
+        {
+          "name": "Cardiomegaly",
+          "score": 0.5236,
+          "gemini_decision_score": 0.6505
+        },
+        {
+          "name": "Infiltration",
+          "score": 0.3823,
+          "gemini_decision_score": 0.3729
+        },
+        {
+          "name": "Fibrosis",
+          "score": 0.3098,
+          "gemini_decision_score": 0.1638
+        }
+      ],
+      "match": "PARTIAL_MATCH",
+      "ctr": 0.534,
+      "ctr_status": "Enlarged (>0.53 \u2014 Cardiomegaly range)",
+      "lung_symmetry_ratio": 0.674,
+      "gradcam_zone": "Cardiomediastinal Silhouette",
+      "decision_1_active": true,
+      "decision_1_triage": "SEMI_URGENT",
+      "decision_1_view": "AP_PORTABLE",
+      "decision_1_quality": 2.32,
+      "report_source": "clinical-nlp",
+      "triage_level": "SEMI_URGENT",
+      "impression": "1. Atelectasis (mild, score 0.63).\n2. CARDIOMEGALY (Mild, score 0.52) consistent with cardiopulmonary congestion / cardiomegaly.\nMulti-pathology study. Leading considerations: Atelectasis, Cardiomegaly. Correlate with symptoms, labs, and prior imaging.",
+      "dictation_transcript": "Frontal chest radiograph for this 71-year-old male patient in Inpatient Medical Ward demonstrates atelectasis (63% confidence), cardiomegaly (52% confidence). Peak Grad-CAM++ activation localizes to the Cardiomediastinal Silhouette. Automated anatomical segmentation measures a cardiothoracic ratio of 0.53 (Enlarged (>0.53 \u2014 Cardiomegaly range)). Prompt clinical correlation and guideline-directed management are recommended.",
+      "recommendations": "1. Assess volume status, serum NT-proBNP / troponin, and obtain 2D echocardiography per ACC/AHA guidelines to evaluate ventricular function.",
+      "timings": {
+        "vision_ms": 378.48,
+        "gradcam_ms": 134.33,
+        "core_total_ms": 512.81,
+        "decision_api_ms": 849.69,
+        "report_ms": 29750.19,
+        "total_ms": 30807.48
+      }
+    },
+    {
+      "case_id": "CASE-05",
+      "name": "Clinical Case: Acute Pneumonia & Infiltration",
+      "filename": "user_xray_pneumonia_infiltrate.jpg",
+      "ground_truth": [
+        "Pneumonia",
+        "Infiltration"
+      ],
+      "detected": [],
+      "top_predictions": [
+        {
+          "name": "Infiltration",
+          "score": 0.307,
+          "gemini_decision_score": 0.6704
+        },
+        {
+          "name": "Pneumothorax",
+          "score": 0.2591,
+          "gemini_decision_score": 0.1259
+        },
+        {
+          "name": "Nodule",
+          "score": 0.2232,
+          "gemini_decision_score": 0.2323
+        },
+        {
+          "name": "Atelectasis",
+          "score": 0.2092,
+          "gemini_decision_score": 0.2822
+        }
+      ],
+      "match": "MISS",
+      "ctr": 0.452,
+      "ctr_status": "Normal (<0.50)",
+      "lung_symmetry_ratio": 0.914,
+      "gradcam_zone": "Cardiomediastinal Silhouette",
+      "decision_1_active": true,
+      "decision_1_triage": "URGENT",
+      "decision_1_view": "SUBOPTIMAL",
+      "decision_1_quality": 2.37,
+      "report_source": "clinical-nlp",
+      "triage_level": "URGENT",
+      "impression": "No acute cardiopulmonary process. Normal chest radiograph does not exclude non-radiopaque thoracic etiology or pulmonary embolism if high clinical suspicion.",
+      "dictation_transcript": "Frontal chest radiograph for this 72-year-old male patient in Emergency Department (ED) demonstrates clear lung fields without focal consolidation, pleural effusion, or acute cardiopulmonary abnormality. Peak Grad-CAM++ activation localizes to the Cardiomediastinal Silhouette. Automated anatomical segmentation measures a cardiothoracic ratio of 0.45 (Normal (<0.50)). Routine clinical follow-up is advised as clinically indicated.",
+      "recommendations": "1. Routine clinical follow-up as clinically indicated. No urgent thoracic imaging or intervention required.",
+      "timings": {
+        "vision_ms": 347.29,
+        "gradcam_ms": 63.97,
+        "core_total_ms": 411.26,
+        "decision_api_ms": 1028.84,
+        "report_ms": 9116.42,
+        "total_ms": 10270.31
+      }
+    },
+    {
+      "case_id": "CASE-06",
+      "name": "Normal Baseline Control",
+      "filename": "normal_control.png",
+      "ground_truth": [],
+      "detected": [],
+      "top_predictions": [
+        {
+          "name": "Edema",
+          "score": 0.2287,
+          "gemini_decision_score": 0.2061
+        },
+        {
+          "name": "Pneumonia",
+          "score": 0.1313,
+          "gemini_decision_score": 0.174
+        },
+        {
+          "name": "Consolidation",
+          "score": 0.1189,
+          "gemini_decision_score": 0.2286
+        },
+        {
+          "name": "Infiltration",
+          "score": 0.1063,
+          "gemini_decision_score": 0.2531
+        }
+      ],
+      "match": "EXACT_NORMAL",
+      "ctr": null,
+      "ctr_status": "Unavailable",
+      "lung_symmetry_ratio": 0.0,
+      "gradcam_zone": "Left Lung \u2014 Upper / Apical Zone",
+      "decision_1_active": true,
+      "decision_1_triage": "ROUTINE",
+      "decision_1_view": "SUBOPTIMAL",
+      "decision_1_quality": 1.17,
+      "report_source": "clinical-nlp",
+      "triage_level": "ROUTINE",
+      "impression": "No acute cardiopulmonary process.",
+      "dictation_transcript": "Frontal chest radiograph for this 45-year-old female patient in Ambulatory / Outpatient demonstrates clear lung fields without focal consolidation, pleural effusion, or acute cardiopulmonary abnormality. Peak Grad-CAM++ activation localizes to the Left Lung \u2014 Upper / Apical Zone. Routine clinical follow-up is advised as clinically indicated.",
+      "recommendations": "1. Routine clinical follow-up as clinically indicated. No urgent thoracic imaging or intervention required.",
+      "timings": {
+        "vision_ms": 305.61,
+        "gradcam_ms": 67.29,
+        "core_total_ms": 372.9,
+        "decision_api_ms": 1063.81,
+        "report_ms": 6595.29,
+        "total_ms": 7732.38
+      }
+    }
+  ]
+}

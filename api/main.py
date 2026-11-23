@@ -1,4 +1,4 @@
-"""CXR Diagnostic API — FastAPI application entry point.
+"""CXR Diagnostic API v4.0 — FastAPI application entry point.
 
 Start with::
 
@@ -17,28 +17,37 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 # Ensure ``src/`` is on the import path so ``cxr.*`` resolves.
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT / "src"))
 
+# Load project .env automatically so GEMINI_API_KEY / GROQ_API_KEY / CXR_* take effect!
+load_dotenv(_PROJECT_ROOT / ".env", override=False)
+
+from cxr.ai.gemini_engine import AI_RUNTIME_CONFIG  # noqa: E402
 from cxr.config import Config  # noqa: E402
+from cxr.serving.batcher import DynamicBatcher  # noqa: E402
 from cxr.serving.pipeline import DiagnosisPipeline  # noqa: E402
 
 from api.routes.health import router as health_router  # noqa: E402
 from api.routes.predict import router as predict_router  # noqa: E402
+from api.routes.records import router as records_router  # noqa: E402
+from api.routes.telemetry import router as telemetry_router  # noqa: E402
+
+AI_RUNTIME_CONFIG.refresh_from_env()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load model on startup, release on shutdown."""
+    """Load clinical ensemble + start DynamicBatcher on startup; clean up on shutdown."""
     app.state.start_time = time.time()
 
-    # Load configuration.
     config_path = os.environ.get(
         "CXR_CONFIG", str(_PROJECT_ROOT / "configs" / "default.yaml")
     )
@@ -49,11 +58,10 @@ async def lifespan(app: FastAPI):
         print(f"[api] Could not load config ({exc}); using defaults")
         config = None
 
-    # Initialise the inference pipeline.
     ckpt = os.environ.get("CXR_CHECKPOINT", str(_PROJECT_ROOT / "checkpoints" / "best.pt"))
-    threshold = 0.45
-    if config is not None:
-        threshold = float(config.get("serve.threshold", 0.45))
+    threshold = float(config.get("serve.threshold", 0.50)) if config is not None else 0.50
+    max_batch = int(config.get("serve.max_batch", 8)) if config is not None else 8
+    max_delay_ms = float(config.get("serve.max_delay_ms", 12.0)) if config is not None else 12.0
 
     try:
         pipeline = DiagnosisPipeline(
@@ -62,26 +70,37 @@ async def lifespan(app: FastAPI):
             threshold=threshold,
         )
         app.state.pipeline = pipeline
-        print(f"[api] Pipeline ready on {pipeline.device}")
+
+        batcher = DynamicBatcher(
+            forward_fn=pipeline.forward_batch,
+            max_batch=max_batch,
+            max_delay_ms=max_delay_ms,
+        )
+        batcher.start()
+        app.state.batcher = batcher
+        print(f"[api] Pipeline & DynamicBatcher ready on {pipeline.device}")
     except Exception as exc:
         print(f"[api] Pipeline init failed: {exc}")
         app.state.pipeline = None
+        app.state.batcher = None
 
     yield
 
-    # Shutdown.
+    if getattr(app.state, "batcher", None) is not None:
+        await app.state.batcher.stop()
     if getattr(app.state, "pipeline", None) is not None:
         app.state.pipeline.close()
         print("[api] Pipeline closed")
 
 
 app = FastAPI(
-    title="CXR Diagnostic API",
+    title="CXR-Diagnostic Pro API",
     description=(
         "Chest Radiograph Multi-Pathology Diagnostic & Report Generator — "
-        "DenseNet-121 classifier with Grad-CAM and LLM report synthesis."
+        "Multi-Backbone Transfer Learning Ensemble (DenseNet-121 + ResNet-50 512px + PSPNet CTR), "
+        "Grad-CAM++ localization, Gemini Decision 1 consensus, and Gemini Flash report synthesis."
     ),
-    version="1.0.0",
+    version="4.0.0",
     lifespan=lifespan,
 )
 
@@ -95,24 +114,39 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(predict_router)
+app.include_router(records_router)
+app.include_router(telemetry_router)
 
-# Mount web frontend static assets
+# Serve compiled React/Vite frontend (web/assets + web/index.html)
 _WEB_DIR = _PROJECT_ROOT / "web"
+if (_WEB_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(_WEB_DIR / "assets")), name="assets")
 if _WEB_DIR.exists():
     app.mount("/web", StaticFiles(directory=str(_WEB_DIR)), name="web")
 
+
 @app.get("/", include_in_schema=False)
 async def root():
-    """Serve the interactive PACS Diagnostic frontend at root /"""
+    """Serve the interactive PACS Diagnostic Studio SPA at root /."""
     index_file = _WEB_DIR / "index.html"
     if index_file.exists():
         return FileResponse(str(index_file))
     return RedirectResponse(url="/docs")
 
+
 @app.get("/{filename:path}", include_in_schema=False)
 async def serve_static_root(filename: str):
-    """Serve relative static files (e.g. styles.css, app.js) when requested from root /"""
-    target = _WEB_DIR / filename
+    """Serve relative static files when requested from root /."""
+    if filename.startswith("api/") or filename in ("docs", "redoc", "openapi.json"):
+        return RedirectResponse(url="/docs")
+    target = (_WEB_DIR / filename).resolve()
+    try:
+        target.relative_to(_WEB_DIR.resolve())
+    except ValueError:
+        return RedirectResponse(url="/")
     if target.exists() and target.is_file():
         return FileResponse(str(target))
+    index_file = _WEB_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
     return RedirectResponse(url="/")

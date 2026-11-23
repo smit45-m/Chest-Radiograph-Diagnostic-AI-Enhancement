@@ -1,0 +1,18 @@
+{
+  "name": "cxr-diagnostic-workstation",
+  "version": "4.0.0",
+  "description": "Chest Radiograph Multi-Pathology Diagnostic & Report Generator — React 19 + Vite + Tailwind v4 + Multi-Backbone Ensemble + PSPNet CTR + Grad-CAM++ + Gemini Decision 1 & Flash",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "typecheck": "npm --prefix frontend run typecheck",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.2"
+  }
+}

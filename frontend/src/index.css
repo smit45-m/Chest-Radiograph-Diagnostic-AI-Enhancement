@@ -1,0 +1,383 @@
+@import "tailwindcss";
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Bespoke Radiology Darkroom Surfaces (Deep Film Carbon + Milled Graphite) */
+  --bg-primary: #06090c;
+  --bg-secondary: #0b1015;
+  --bg-elevated: #0f151c;
+  --bg-card: #0d1319;
+  --bg-glass: rgba(8, 12, 16, 0.78);
+  --bg-film: #020406;
+
+  --text-primary: #f1f5f8;
+  --text-secondary: #94a3b2;
+  --text-muted: #5d6d7e;
+
+  --border-subtle: rgba(196, 222, 240, 0.085);
+  --border-strong: rgba(196, 222, 240, 0.175);
+  --border-specular: rgba(255, 255, 255, 0.09);
+
+  /* Disciplined Clinical Accent System */
+  --accent-clinical: #14b8a6;
+  --accent-clinical-dim: rgba(20, 184, 166, 0.13);
+  --accent-clinical-glow: rgba(20, 184, 166, 0.38);
+
+  --accent-optical: #38bdf8;
+  --accent-optical-dim: rgba(56, 189, 248, 0.12);
+
+  --accent-alert: #f43f5e;
+  --accent-alert-dim: rgba(244, 63, 94, 0.14);
+  --accent-alert-glow: rgba(244, 63, 94, 0.36);
+
+  --accent-amber: #f59e0b;
+  --accent-amber-dim: rgba(245, 158, 11, 0.13);
+
+  --accent-titanium: #8fa5b8;
+  --accent-titanium-dim: rgba(143, 165, 184, 0.12);
+
+  --surface-grid: rgba(186, 218, 238, 0.032);
+  --spotlight-color: rgba(20, 184, 166, 0.095);
+  --shadow-card:
+    inset 0 1px 0 0 rgba(214, 236, 252, 0.07),
+    0 24px 64px -26px rgba(0, 0, 0, 0.85);
+  --shadow-float: 0 36px 96px -24px rgba(0, 0, 0, 0.92);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surgical Daylight Alabaster + Crisp Clinical Porcelain */
+  --bg-primary: #f3f6f8;
+  --bg-secondary: #e9eff3;
+  --bg-elevated: #ffffff;
+  --bg-card: #fafcfd;
+  --bg-glass: rgba(243, 246, 248, 0.86);
+  --bg-film: #05080b;
+
+  --text-primary: #0c161f;
+  --text-secondary: #4a5b6b;
+  --text-muted: #7b8c9c;
+
+  --border-subtle: rgba(12, 22, 31, 0.085);
+  --border-strong: rgba(12, 22, 31, 0.17);
+  --border-specular: rgba(255, 255, 255, 0.95);
+
+  --accent-clinical: #0d9488;
+  --accent-clinical-dim: rgba(13, 148, 136, 0.1);
+  --accent-clinical-glow: rgba(13, 148, 136, 0.24);
+
+  --accent-optical: #0284c7;
+  --accent-optical-dim: rgba(2, 132, 199, 0.1);
+
+  --accent-alert: #e11d48;
+  --accent-alert-dim: rgba(225, 29, 72, 0.1);
+  --accent-alert-glow: rgba(225, 29, 72, 0.24);
+
+  --accent-amber: #d97706;
+  --accent-amber-dim: rgba(217, 119, 6, 0.1);
+
+  --accent-titanium: #5b7083;
+  --accent-titanium-dim: rgba(91, 112, 131, 0.1);
+
+  --surface-grid: rgba(12, 22, 31, 0.036);
+  --spotlight-color: rgba(13, 148, 136, 0.075);
+  --shadow-card:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.96),
+    0 22px 54px -26px rgba(12, 28, 44, 0.13);
+  --shadow-float: 0 30px 84px -24px rgba(12, 28, 44, 0.17);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow-x: hidden;
+    transition:
+      background-color 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+      color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  ::selection {
+    background-color: var(--accent-clinical);
+    color: #ffffff;
+  }
+}
+
+/* Bespoke Swiss-Clinical Typography */
+.font-display {
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: -0.032em;
+}
+
+.font-serif-editorial {
+  font-family: "Newsreader", Georgia, serif;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -0.015em;
+}
+
+.font-mono-tech {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Precision Architectural Instrument Surfaces with Specular Edge & Pointer Sheen */
+.atelier-card {
+  position: relative;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.atelier-card-strong {
+  position: relative;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-card);
+  transition:
+    border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Cursor-tracked subtle radial sheen inside SpotlightCard */
+.spotlight-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.spotlight-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--spot-opacity, 0);
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  background: radial-gradient(
+    420px circle at var(--mx, 50%) var(--my, 50%),
+    var(--spotlight-color),
+    transparent 70%
+  );
+  z-index: 0;
+}
+
+.spotlight-surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Ultra-subtle Atmospheric Grain */
+.film-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 55;
+  opacity: 0.018;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Calibrated Range Slider */
+input[type="range"].clinical-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  outline: none;
+}
+
+input[type="range"].clinical-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-clinical);
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 0 0 1px var(--accent-clinical), 0 0 12px var(--accent-clinical-glow);
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+input[type="range"].clinical-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.18);
+}
+
+/* Breathing Ambient Pulmonary Auras (12 breaths/min calm physiological rhythm) */
+@keyframes pulmonary-breathe-a {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translate3d(28px, -18px, 0) scale(1.09);
+    opacity: 0.72;
+  }
+}
+
+@keyframes pulmonary-breathe-b {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1.05);
+    opacity: 0.36;
+  }
+  50% {
+    transform: translate3d(-24px, 22px, 0) scale(0.95);
+    opacity: 0.62;
+  }
+}
+
+.aura-breathe-a {
+  animation: pulmonary-breathe-a 11s ease-in-out infinite;
+}
+
+.aura-breathe-b {
+  animation: pulmonary-breathe-b 14s ease-in-out infinite;
+}
+
+/* Live ECG / Telemetry Status LED */
+@keyframes pulse-led {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
+.clinical-led {
+  animation: pulse-led 2.4s ease-in-out infinite;
+}
+
+@keyframes ripple-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.clinical-ripple {
+  animation: ripple-ring 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* Optical Laser Sweep During Inference */
+@keyframes scan-beam {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.9;
+  }
+  82% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(520%);
+    opacity: 0;
+  }
+}
+
+.scan-beam {
+  animation: scan-beam 1.65s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Subtle idle optical shimmer along specimen frame */
+@keyframes idle-scanline {
+  0% {
+    transform: translateY(-10%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.38;
+  }
+  85% {
+    opacity: 0.38;
+  }
+  100% {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+}
+
+.idle-scanline {
+  animation: idle-scanline 6.5s linear infinite;
+}
+
+/* Refined Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-clinical);
+}
+
+/* Hospital Print Sheet */
+.print-only {
+  display: none;
+}
+
+@media print {
+  html,
+  body,
+  #root {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    overflow: visible !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .aura-breathe-a,
+  .aura-breathe-b,
+  .clinical-led,
+  .clinical-ripple,
+  .scan-beam,
+  .idle-scanline {
+    animation: none !important;
+  }
+}

@@ -15,8 +15,14 @@ data/nih/tmp/
 data/nih/metadata/*.csv
 data/nih/metadata/*.txt
 !data/nih/metadata/.gitkeep
+data/*.db
+data/*.db-wal
+data/*.db-shm
 checkpoints/
-outputs/
+outputs/*
+!outputs/benchmark_results/
+outputs/benchmark_results/*
+!outputs/benchmark_results/full_evaluation_report.json
 runs/
 logs/
 *.pt
@@ -28,3 +34,7 @@ logs/
 
 .DS_Store
 Thumbs.db
+node_modules/
+frontend/node_modules/
+test-results/
+playwright-report/
