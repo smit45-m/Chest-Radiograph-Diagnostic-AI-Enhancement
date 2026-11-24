@@ -246,7 +246,7 @@ async def predict(
     request: Request,
     file: UploadFile = File(..., description="Chest X-ray image (JPEG/PNG/WEBP/DICOM)"),
     threshold: float = Form(0.50, description="Pathology detection threshold"),
-    tta: bool = Form(False, description="Enable multi-scale Test-Time Augmentation"),
+    tta: bool = Form(True, description="Enable fast 2-view non-chiral Test-Time Augmentation"),
     use_gemini_decision: bool = Form(True, description="Enable Gemini Decision 1 multimodal consensus"),
     use_llm: bool = Form(True, description="Enable Gemini Flash / Groq clinical report synthesis"),
     colormap: str = Form("turbo", description="Grad-CAM++ colormap (turbo/inferno/viridis/clinical/jet)"),

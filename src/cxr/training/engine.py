@@ -13,7 +13,13 @@ from tqdm import tqdm
 
 from cxr.models.densenet import DenseNet121Classifier, TemperatureScaler
 from cxr.models.losses import build_loss, pos_weight_from_labels
-from cxr.training.metrics import compute_metrics, format_metrics_table, save_metrics
+from cxr.training.metrics import (
+    compute_metrics,
+    f1_optimal_thresholds,
+    format_metrics_table,
+    save_metrics,
+    youden_thresholds,
+)
 
 
 def _device() -> torch.device:
@@ -49,6 +55,20 @@ def _apply_mixup(
     mixed_x = lam * images + (1.0 - lam) * images[idx]
     mixed_y = lam * targets + (1.0 - lam) * targets[idx]
     return mixed_x, mixed_y
+
+
+@torch.no_grad()
+def collect_val_logits(model, loader, device) -> tuple[torch.Tensor, torch.Tensor]:
+    """Collect validation logits and binary targets for post-hoc calibration (zero test leakage)."""
+    model.eval()
+    ys, ls = [], []
+    for batch in loader:
+        images = batch["image"].to(device, non_blocking=True)
+        with torch.autocast(device_type=device.type, enabled=device.type == "cuda"):
+            logits = model(images)
+        ys.append(batch["target"].float().cpu())
+        ls.append(logits.float().cpu())
+    return torch.cat(ls, dim=0), torch.cat(ys, dim=0)
 
 
 @torch.no_grad()
@@ -212,6 +232,33 @@ def fit(cfg, loaders: dict) -> DenseNet121Classifier:
             if bad >= patience:
                 print("Early stopping")
                 break
+
+    # Post-hoc per-class temperature scaling & F1-optimal threshold calibration on validation split
+    val_loader = loaders.get("val")
+    if val_loader is not None and (ckpt_dir / "best.pt").exists():
+        best_model = DenseNet121Classifier.load(ckpt_dir / "best.pt", map_location=device).to(device).eval()
+        val_logits, val_targets = collect_val_logits(best_model, val_loader, device)
+        temp_scaler = TemperatureScaler(num_classes=val_logits.shape[1])
+        cal_stats = temp_scaler.fit_calibration(val_logits, val_targets)
+        cal_probs = torch.sigmoid(temp_scaler(val_logits)).numpy()
+        y_val_np = val_targets.numpy()
+        opt_f1_thrs = f1_optimal_thresholds(y_val_np, cal_probs, beta=1.0)
+        opt_youden_thrs = youden_thresholds(y_val_np, cal_probs)
+        best_model.save(
+            ckpt_dir / "best.pt",
+            extra={
+                "val_mean_auc": best_auc,
+                "history": history,
+                "temperatures": temp_scaler.temperature.detach().tolist(),
+                "f1_thresholds": opt_f1_thrs,
+                "youden_thresholds": opt_youden_thrs,
+                "calibration": cal_stats,
+            },
+        )
+        print(
+            f"Fitted post-hoc per-class temperature calibration "
+            f"(NLL {cal_stats['nll_before']:.4f} -> {cal_stats['nll_after']:.4f})"
+        )
 
     print(f"\nBest val mean ROC-AUC: {best_auc:.4f}")
     return model

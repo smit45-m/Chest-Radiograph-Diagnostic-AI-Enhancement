@@ -241,7 +241,7 @@ export default function App() {
         const res = await api.predict({
           file,
           threshold: cutoff,
-          tta: false,
+          tta: true,
           useGeminiDecision: cfg?.gemini_decision_enabled ?? true,
           useLlm: cfg?.gemini_flash_enabled ?? true,
           colormap: cmap,

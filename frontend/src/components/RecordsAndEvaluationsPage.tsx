@@ -48,10 +48,12 @@ type SubTab = "records" | "evaluations";
 const BACKBONE_LABELS: Record<string, string> = {
   densenet121_all: "DenseNet-121 Multi-Cohort",
   densenet121_nih: "DenseNet-121 NIH-14",
+  densenet121_pc: "DenseNet-121 PadChest 160k",
   resnet50_512: "ResNet-50 High-Res 512px",
+  cnn_ensemble_4x: "4-Backbone CNN Ensemble",
   cnn_ensemble_3x: "3-Backbone CNN Ensemble",
   gemini_decision_1: "Gemini Decision 1 (0 Tok)",
-  fused_consensus: "Fused Clinical Consensus",
+  fused_consensus: "5-Model Clinical Consensus",
 };
 
 export const RecordsAndEvaluationsPage: React.FC<RecordsAndEvaluationsPageProps> = ({
@@ -922,10 +924,10 @@ export const RecordsAndEvaluationsPage: React.FC<RecordsAndEvaluationsPageProps>
                 <div className="grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-6">
                   {[
                     { label: "Accuracy", val: headline.accuracy * 100, dec: 1, suf: "%" },
-                    { label: "Micro ROC-AUC", val: headline.micro_roc_auc, dec: 3, suf: "" },
-                    { label: "Macro ROC-AUC", val: headline.macro_roc_auc, dec: 3, suf: "" },
-                    { label: "Specificity", val: headline.specificity * 100, dec: 1, suf: "%" },
+                    { label: "Precision", val: headline.precision * 100, dec: 1, suf: "%" },
+                    { label: "Recall", val: headline.sensitivity * 100, dec: 1, suf: "%" },
                     { label: "F1-Score", val: headline.f1_score, dec: 3, suf: "" },
+                    { label: "Micro ROC-AUC", val: headline.micro_roc_auc, dec: 3, suf: "" },
                     { label: "Brier Error", val: headline.brier_score, dec: 3, suf: "" },
                   ].map((k) => (
                     <SpotlightCard key={k.label} className="rounded-2xl p-4">
@@ -962,11 +964,11 @@ export const RecordsAndEvaluationsPage: React.FC<RecordsAndEvaluationsPageProps>
                             style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
                           >
                             <th className="py-2.5 pr-3 font-medium">Pipeline</th>
-                            <th className="px-2 py-2.5 text-right font-medium">Accuracy</th>
-                            <th className="px-2 py-2.5 text-right font-medium">ROC-AUC</th>
-                            <th className="px-2 py-2.5 text-right font-medium">Spec.</th>
+                            <th className="px-2 py-2.5 text-right font-medium">Acc</th>
+                            <th className="px-2 py-2.5 text-right font-medium">Prec</th>
+                            <th className="px-2 py-2.5 text-right font-medium">Recall</th>
                             <th className="px-2 py-2.5 text-right font-medium">F1</th>
-                            <th className="py-2.5 pl-2 text-right font-medium">Brier</th>
+                            <th className="py-2.5 pl-2 text-right font-medium">ROC-AUC</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y" style={{ borderColor: "var(--border-subtle)" }}>
@@ -986,23 +988,23 @@ export const RecordsAndEvaluationsPage: React.FC<RecordsAndEvaluationsPageProps>
                                 <td className="px-2 py-3 text-right font-mono-tech font-semibold">
                                   {(m.accuracy * 100).toFixed(1)}%
                                 </td>
+                                <td className="px-2 py-3 text-right font-mono-tech">
+                                  {(m.precision * 100).toFixed(1)}%
+                                </td>
+                                <td className="px-2 py-3 text-right font-mono-tech">
+                                  {(m.sensitivity * 100).toFixed(1)}%
+                                </td>
                                 <td
-                                  className="px-2 py-3 text-right font-mono-tech"
+                                  className="px-2 py-3 text-right font-mono-tech font-semibold"
                                   style={{ color: "var(--accent-clinical)" }}
                                 >
-                                  {m.micro_roc_auc != null ? m.micro_roc_auc.toFixed(3) : "—"}
-                                </td>
-                                <td className="px-2 py-3 text-right font-mono-tech">
-                                  {(m.specificity * 100).toFixed(1)}%
-                                </td>
-                                <td className="px-2 py-3 text-right font-mono-tech">
                                   {m.f1_score.toFixed(3)}
                                 </td>
                                 <td
                                   className="py-3 pl-2 text-right font-mono-tech"
                                   style={{ color: "var(--text-secondary)" }}
                                 >
-                                  {m.brier_score.toFixed(3)}
+                                  {m.micro_roc_auc != null ? m.micro_roc_auc.toFixed(3) : "—"}
                                 </td>
                               </tr>
                             );

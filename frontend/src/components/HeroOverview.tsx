@@ -180,7 +180,7 @@ export const HeroOverview: React.FC<HeroOverviewProps> = ({
               <span>
                 {health?.gpu_name
                   ? `${health.gpu_name.replace(/NVIDIA GeForce\s*/i, "")} · 14-Pathology AI`
-                  : "4-Model Thoracic Diagnostic AI"}
+                  : "5-Model Thoracic Diagnostic AI"}
               </span>
             </div>
 

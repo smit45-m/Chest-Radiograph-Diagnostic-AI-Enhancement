@@ -25,7 +25,7 @@ from cxr.interpret.gradcam import (
     overlay_to_png_bytes,
 )
 from cxr.models.densenet import DenseNet121Classifier
-from cxr.models.ensemble import ClinicalEnsemble, preprocess_radiograph
+from cxr.models.ensemble import ClinicalEnsemble, build_vlm_radiograph_jpeg, preprocess_radiograph
 from cxr.reports.generator import generate_report
 
 
@@ -123,18 +123,18 @@ class DiagnosisPipeline:
         self,
         image_input: bytes | Image.Image,
         threshold: float | None = None,
-        tta: bool = False,
+        tta: bool = True,
         patient: dict[str, Any] | None = None,
         use_gemini_decision: bool = True,
         use_llm: bool = True,
         colormap: str = "turbo",
         run_segmentation: bool = True,
     ) -> dict[str, Any]:
-        """Run full multi-backbone diagnosis, PSPNet CTR, Grad-CAM++, and clinical report synthesis."""
+        """Run full 4-backbone transfer diagnosis, non-chiral TTA, PSPNet CTR, Grad-CAM++, and report synthesis."""
         t0 = time.perf_counter()
         thr = threshold if threshold is not None else self.threshold
 
-        # 1. Decode image & keep compact JPEG bytes for optional Gemini multimodal APIs
+        # 1. Decode image & build contrast-balanced 768px clinical JPEG for Gemini Decision 1 & Vision LLMs
         if isinstance(image_input, bytes):
             raw_bytes = image_input
             pil_img = Image.open(io.BytesIO(image_input)).convert("RGB")
@@ -144,12 +144,7 @@ class DiagnosisPipeline:
             pil_img.save(buf, format="JPEG", quality=90)
             raw_bytes = buf.getvalue()
 
-        # Compact 768px JPEG for ultra-low-latency Gemini Decision 1 & Gemini Flash calls
-        gem_img = pil_img.copy()
-        gem_img.thumbnail((768, 768), Image.Resampling.LANCZOS)
-        gem_buf = io.BytesIO()
-        gem_img.save(gem_buf, format="JPEG", quality=85)
-        gemini_jpeg_bytes = gem_buf.getvalue()
+        gemini_jpeg_bytes = build_vlm_radiograph_jpeg(pil_img, size=768, quality=88)
 
         # 2. Launch Gemini Decision 1 concurrently with local GPU preprocessing/inference!
         import concurrent.futures
@@ -367,9 +362,7 @@ class DiagnosisPipeline:
         batch = batch.to(self.device)
         use_amp = self.device.type == "cuda"
         with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp, dtype=torch.float16):
-            out = self.model(batch).float()
-            if not self.is_clinical_xrv:
-                out = torch.sigmoid(out)
+            out = torch.sigmoid(self.model(batch).float())
         return out.cpu()
 
     # ------------------------------------------------------------------

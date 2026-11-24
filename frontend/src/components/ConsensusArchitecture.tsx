@@ -38,6 +38,13 @@ const BACKBONE_KEYS = [
     spec: "DenseNet-121 · 112K scans",
   },
   {
+    key: "densenet121_pc",
+    alt: "densenet121-pc",
+    short: "PadChest",
+    title: "PadChest 160k",
+    spec: "DenseNet-121 · EU hospital",
+  },
+  {
     key: "resnet50_512",
     alt: "resnet50-512",
     short: "High-Res",
@@ -119,7 +126,7 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
             </span>
           </h1>
           <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
-            See how all 4 models agree and inspect automated heart &amp; lung geometry.
+            See how all 5 models agree and inspect automated heart &amp; lung geometry.
           </p>
         </div>
 
@@ -140,8 +147,8 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
         </button>
       </div>
 
-      {/* 4 Clean Model Opinion Cards */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+      {/* 5 Clean Model Opinion Cards */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {BACKBONE_KEYS.map((b, idx) => {
           const loaded =
             activeBackbones.some((ab) => ab === b.key || ab === b.alt) ||
@@ -495,6 +502,7 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
                     <th className="py-3 pr-3 font-medium">Condition</th>
                     <th className="px-2 py-3 text-right font-medium">Multi-Cohort</th>
                     <th className="px-2 py-3 text-right font-medium">NIH-14</th>
+                    <th className="px-2 py-3 text-right font-medium">PadChest</th>
                     <th className="px-2 py-3 text-right font-medium">High-Res</th>
                     <th className="px-2 py-3 text-right font-medium">Gemini AI</th>
                     <th className="py-3 pl-2 text-right font-medium">Consensus</th>
@@ -505,6 +513,7 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
                     const isPos = p.score >= threshold;
                     const dnAll = getBackboneScore(p.backbones, "densenet121_all", "densenet121-all");
                     const dnNih = getBackboneScore(p.backbones, "densenet121_nih", "densenet121-nih");
+                    const dnPc = getBackboneScore(p.backbones, "densenet121_pc", "densenet121-pc");
                     const rn50 = getBackboneScore(p.backbones, "resnet50_512", "resnet50-512");
                     const dec = p.gemini_decision_score;
 
@@ -541,6 +550,12 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
                           style={{ color: "var(--text-secondary)" }}
                         >
                           {dnNih != null ? `${(dnNih * 100).toFixed(0)}%` : "—"}
+                        </td>
+                        <td
+                          className="px-2 py-3.5 text-right font-mono-tech"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
+                          {dnPc != null ? `${(dnPc * 100).toFixed(0)}%` : "—"}
                         </td>
                         <td
                           className="px-2 py-3.5 text-right font-mono-tech"

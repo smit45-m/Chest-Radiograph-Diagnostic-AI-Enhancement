@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from sklearn.metrics import average_precision_score, roc_auc_score, roc_curve
+from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score, roc_curve
 
 from cxr.constants import PATHOLOGIES
 
@@ -75,6 +75,27 @@ def youden_thresholds(y_true: np.ndarray, y_score: np.ndarray) -> list[float]:
         fpr, tpr, thr = roc_curve(y_true[:, i], y_score[:, i])
         j = tpr - fpr
         thresholds.append(float(thr[int(np.argmax(j))]))
+    return thresholds
+
+
+def f1_optimal_thresholds(y_true: np.ndarray, y_score: np.ndarray, beta: float = 1.0) -> list[float]:
+    """Per-class threshold maximizing F-beta score on an independent validation split.
+
+    Use `beta=1.0` for balanced Precision/Recall, or `beta=1.5` for higher clinical recall.
+    """
+    thresholds = []
+    b2 = beta * beta
+    for i in range(y_true.shape[1]):
+        if y_true[:, i].min() == y_true[:, i].max():
+            thresholds.append(0.5)
+            continue
+        prec, rec, thr = precision_recall_curve(y_true[:, i], y_score[:, i])
+        if len(thr) == 0:
+            thresholds.append(0.5)
+            continue
+        f_scores = (1.0 + b2) * prec[:-1] * rec[:-1] / np.clip(b2 * prec[:-1] + rec[:-1], 1e-8, None)
+        best_thr = float(thr[int(np.argmax(f_scores))])
+        thresholds.append(round(max(0.15, min(0.85, best_thr)), 4))
     return thresholds
 
 

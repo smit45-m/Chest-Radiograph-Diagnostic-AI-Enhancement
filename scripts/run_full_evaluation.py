@@ -248,6 +248,7 @@ def main() -> None:
     backbone_mats: dict[str, np.ndarray] = {
         "densenet121_all": np.zeros((n_cases, n_classes), dtype=np.float32),
         "densenet121_nih": np.zeros((n_cases, n_classes), dtype=np.float32),
+        "densenet121_pc": np.zeros((n_cases, n_classes), dtype=np.float32),
         "resnet50_512": np.zeros((n_cases, n_classes), dtype=np.float32),
         "gemini_decision_1": np.zeros((n_cases, n_classes), dtype=np.float32),
     }
@@ -269,7 +270,7 @@ def main() -> None:
         res = pipeline.predict(
             pil_img,
             threshold=0.50,
-            tta=False,
+            tta=True,
             patient=case["patient"],
             use_gemini_decision=True,
             use_llm=True,
@@ -285,7 +286,7 @@ def main() -> None:
             y_fused[i, j] = float(p["score"])
             y_cnn[i, j] = float(p.get("cnn_score") if p.get("cnn_score") is not None else p["score"])
             bmap = p.get("backbones") or {}
-            for bk in ("densenet121_all", "densenet121_nih", "resnet50_512"):
+            for bk in ("densenet121_all", "densenet121_nih", "densenet121_pc", "resnet50_512"):
                 backbone_mats[bk][i, j] = float(bmap.get(bk, y_cnn[i, j]))
             backbone_mats["gemini_decision_1"][i, j] = float(
                 p["gemini_decision_score"] if p.get("gemini_decision_score") is not None else y_cnn[i, j]
@@ -361,8 +362,9 @@ def main() -> None:
     backbone_comparison = {
         "densenet121_all": compute_suite_metrics(y_true, backbone_mats["densenet121_all"], 0.50),
         "densenet121_nih": compute_suite_metrics(y_true, backbone_mats["densenet121_nih"], 0.50),
+        "densenet121_pc": compute_suite_metrics(y_true, backbone_mats["densenet121_pc"], 0.50),
         "resnet50_512": compute_suite_metrics(y_true, backbone_mats["resnet50_512"], 0.50),
-        "cnn_ensemble_3x": cnn_metrics,
+        "cnn_ensemble_4x": cnn_metrics,
         "gemini_decision_1": compute_suite_metrics(y_true, backbone_mats["gemini_decision_1"], 0.50),
         "fused_consensus": fused_metrics,
     }
@@ -411,7 +413,7 @@ def main() -> None:
     out_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
     print("\n" + "=" * 88)
-    print("HEADLINE EVALUATION METRICS (FUSED 3-BACKBONE + PSPNET CTR + GEMINI DECISION 1)")
+    print("HEADLINE EVALUATION METRICS (5-MODEL CONSENSUS: 4-CNN TRANSFER + PSPNET CTR + GEMINI DECISION 1)")
     print("=" * 88)
     print(f"  Overall Accuracy      : {fused_metrics['accuracy']*100:.2f}%")
     print(f"  Micro ROC-AUC         : {fused_metrics['micro_roc_auc']:.4f}")

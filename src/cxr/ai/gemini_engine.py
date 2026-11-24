@@ -48,22 +48,62 @@ CURRENT_GEMINI_MODELS: list[str] = [
     "gemini-4-hydrogen",
 ]
 
-# Clinical radiological definitions for each of the 14 NIH pathologies used by Gemini Decision 1
+# Radiologist-grade differential criteria with explicit specificity & size/projection definitions
 PATHOLOGY_DECISION_CRITERIA: dict[str, str] = {
-    "Atelectasis": "Is there linear, subsegmental, or lobar pulmonary collapse/volume loss with fissure or mediastinal shift on this chest radiograph?",
-    "Cardiomegaly": "Is the cardiac silhouette enlarged with a cardiothoracic ratio (CTR) greater than 0.50 on this frontal chest radiograph?",
-    "Effusion": "Is there blunting of a costophrenic sulcus, meniscus sign, or layered opacity indicating pleural effusion?",
-    "Infiltration": "Are there patchy or ill-defined interstitial or alveolar airspace opacities consistent with pulmonary infiltration?",
-    "Mass": "Is there a discrete pulmonary or mediastinal mass lesion measuring greater than 3 cm in diameter?",
-    "Nodule": "Is there a discrete rounded pulmonary nodule measuring 3 cm or less in diameter?",
-    "Pneumonia": "Are there focal or multifocal airspace consolidations/opacities with air bronchograms characteristic of infectious pneumonia?",
-    "Pneumothorax": "Is there a visible visceral pleural line with absent peripheral lung markings indicating air in the pleural space (pneumothorax)?",
-    "Consolidation": "Is there dense homogeneous alveolar airspace filling (consolidation) obscuring underlying pulmonary vessels?",
-    "Edema": "Are there signs of pulmonary vascular congestion, Kerley B lines, perihilar bat-wing opacities, or interstitial/alveolar pulmonary edema?",
-    "Emphysema": "Are there signs of pulmonary hyperinflation, flattened hemidiaphragms, increased retrosternal space, or bullae suggesting emphysema/COPD?",
-    "Fibrosis": "Are there coarse reticular opacities, honeycombing, or architectural distortion indicating pulmonary fibrosis?",
-    "Pleural_Thickening": "Is there apical capping or smooth/nodular thickening of the parietal or visceral pleura?",
-    "Hernia": "Is there retrocardiac air-fluid level or protrusion of abdominal viscera above the diaphragm indicating hiatal or diaphragmatic hernia?",
+    "Atelectasis": (
+        "Is there definite linear, plate-like, subsegmental, or lobar lung volume loss/collapse "
+        "(with fissure/mediastinal shift or elevated hemidiaphragm)? Answer Yes only for clear collapse, not normal vascular markings."
+    ),
+    "Cardiomegaly": (
+        "Is the cardiac silhouette genuinely enlarged (CTR > 0.50 on upright PA view, or > 0.56 on portable AP view accounting for AP magnification)? "
+        "Do NOT answer Yes for mild AP projection magnification alone."
+    ),
+    "Effusion": (
+        "Is there clear blunting of a costophrenic angle, a concave meniscus sign, or layered homogeneous pleural fluid? "
+        "Answer No if both costophrenic angles are sharp."
+    ),
+    "Infiltration": (
+        "Are there distinct patchy alveolar or interstitial lung opacities/infiltrates in the lung parenchyma "
+        "(consistent with acute infectious or inflammatory infiltrate)? Answer No for normal bronchovascular markings."
+    ),
+    "Mass": (
+        "Is there a definite discrete pulmonary or mediastinal mass lesion measuring GREATER than 3 cm in diameter with well- or ill-defined margins? "
+        "Answer No if no discrete mass > 3 cm is present."
+    ),
+    "Nodule": (
+        "Is there a discrete rounded focal pulmonary nodule measuring 3 cm or LESS in diameter within the lung parenchyma? "
+        "Answer No for normal end-on vessels or rib crossings."
+    ),
+    "Pneumonia": (
+        "Are there clear focal, segmental, or lobar airspace opacities/consolidations (or air bronchograms) clinically and radiographically consistent with acute pneumonia? "
+        "Consider clinical fever/cough context alongside visible airspace opacity."
+    ),
+    "Pneumothorax": (
+        "Is there a definite crisp visceral pleural line with completely absent peripheral lung markings indicating pleural air (pneumothorax)? "
+        "Answer No for skin folds or scapular borders."
+    ),
+    "Consolidation": (
+        "Is there dense, homogeneous alveolar airspace consolidation obscuring underlying pulmonary vessels or creating an air bronchogram? "
+        "Answer No for clear aerated lungs or solitary nodules without airspace filling."
+    ),
+    "Edema": (
+        "Are there unmistakable signs of pulmonary edema such as perihilar bat-wing airspace opacities, Kerley B lines, or marked upper-lobe cephalization? "
+        "Answer No for isolated cardiomegaly with clear lung fields."
+    ),
+    "Emphysema": (
+        "Are there clear signs of emphysema/COPD: severely flattened hemidiaphragms, hyperlucent hyperinflated lungs, or visible bullae? "
+        "Answer No for normal inspiratory effort."
+    ),
+    "Fibrosis": (
+        "Are there distinct coarse reticular interstitial opacities, basilar/peripheral honeycombing, or chronic architectural distortion indicating pulmonary fibrosis? "
+        "Consider ILD history alongside reticular shadowing."
+    ),
+    "Pleural_Thickening": (
+        "Is there definite apical pleural capping or smooth/nodular thickening along the lateral pleural margin? Answer No for normal rib/companion shadows."
+    ),
+    "Hernia": (
+        "Is there a clear retrocardiac air-fluid level or visible herniation of stomach/abdominal viscera above the diaphragm? Answer No for normal subdiaphragmatic gastric bubble."
+    ),
 }
 
 
@@ -130,7 +170,7 @@ class AIRuntimeConfig:
         default_factory=lambda: os.environ.get("GEMINI_FLASH_ENABLED", "true").lower() != "false"
     )
     decision_fusion_weight: float = field(
-        default_factory=lambda: float(os.environ.get("GEMINI_DECISION_WEIGHT", "0.30"))
+        default_factory=lambda: float(os.environ.get("GEMINI_DECISION_WEIGHT", "0.22"))
     )
     groq_api_key: str = field(default_factory=lambda: os.environ.get("GROQ_API_KEY", ""))
     groq_model: str = field(default_factory=lambda: os.environ.get("GROQ_LLM_MODEL", "openai/gpt-oss-20b"))

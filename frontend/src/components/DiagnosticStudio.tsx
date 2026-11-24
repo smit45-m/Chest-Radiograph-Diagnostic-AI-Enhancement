@@ -1109,7 +1109,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                   color: "var(--text-primary)",
                 }}
               >
-                4-Model View
+                5-Model View
               </button>
             </div>
           </SpotlightCard>
