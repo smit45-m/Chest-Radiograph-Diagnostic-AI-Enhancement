@@ -8,6 +8,7 @@ import {
   Columns2,
   Eye,
   HeartPulse,
+  Image as ImageIcon,
   Layers,
   MoveHorizontal,
   RotateCcw,
@@ -23,8 +24,9 @@ import {
   COLORMAP_OPTIONS,
   PATHOLOGY_CLINICAL_NOTE,
   WINDOW_PRESETS,
-  cleanSampleTitle,
   formatPathology,
+  formatTriageLabel,
+  shortSampleTitle,
   type PageId,
 } from "../data/clinicalCatalog";
 import type {
@@ -63,6 +65,8 @@ interface DiagnosticStudioProps {
   onNavigatePage: (page: PageId) => void;
 }
 
+type ViewMode = "heatmap" | "anatomy" | "compare" | "original";
+
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -76,7 +80,6 @@ function loadImg(src: string): Promise<HTMLImageElement> {
 export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
   samples,
   activeStudyId,
-  activeStudyName,
   imageUrl,
   predictionData,
   activePathology,
@@ -102,16 +105,16 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
   const [heatImg, setHeatImg] = useState<HTMLImageElement | null>(null);
   const [anatImg, setAnatImg] = useState<HTMLImageElement | null>(null);
 
-  // Core 4 Imaging Overlays
-  const [showHeatmap, setShowHeatmap] = useState(true);
-  const [showAnatomy, setShowAnatomy] = useState(false);
-  const [splitCompare, setSplitCompare] = useState(false);
+  // Clean 4-Mode Segmented Viewer State + Collapsible Precision Tools
+  const [viewMode, setViewMode] = useState<ViewMode>("heatmap");
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [cutoffOpen, setCutoffOpen] = useState(false);
   const [splitPos, setSplitPos] = useState(0.5);
   const [loupeActive, setLoupeActive] = useState(false);
   const [heatmapOpacity, setHeatmapOpacity] = useState(0.68);
   const [windowPreset, setWindowPreset] = useState<WindowPreset>("standard");
 
-  // Zoom / Pan / Caliper / Cursor Telemetry
+  // Zoom / Pan / Caliper / Pointer State
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [caliperMode, setCaliperMode] = useState(false);
@@ -134,6 +137,10 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
   const [dragOrigin, setDragOrigin] = useState({ x: 0, y: 0 });
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAllPathologies, setShowAllPathologies] = useState(false);
+
+  const showHeatmap = viewMode === "heatmap" || viewMode === "compare";
+  const showAnatomy = viewMode === "anatomy";
+  const splitCompare = viewMode === "compare";
 
   useEffect(() => {
     if (!imageUrl) {
@@ -201,7 +208,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
     return { sx, sy, srcSide, dx, dy, side };
   }, []);
 
-  // Precision Radiograph Canvas Compositor
+  // Radiograph Canvas Compositor
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -235,13 +242,11 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
       ctx.scale(zoom, zoom);
       ctx.translate(-w / 2, -h / 2);
 
-      // 1. Base Chest Radiograph
       ctx.filter = filterStr;
       ctx.drawImage(baseImg, sx, sy, srcSide, srcSide, dx, dy, side, side);
       ctx.filter = "none";
 
-      if (withOverlays && !holdingSpace) {
-        // 2. PSPNet Anatomy & CTR Contour Overlay
+      if (withOverlays && !holdingSpace && viewMode !== "original") {
         if (showAnatomy && anatImg) {
           ctx.save();
           ctx.globalAlpha = 0.86;
@@ -249,7 +254,6 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
           ctx.restore();
         }
 
-        // 3. Grad-CAM++ Pure RGBA Spatial Heatmap + Reticle
         if (showHeatmap && heatImg) {
           ctx.save();
           ctx.globalAlpha = activeHeatmap?.raw_heatmap_base64
@@ -265,8 +269,8 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
             const rw = (bx2 - bx1) * side;
             const rh = (by2 - by1) * side;
             ctx.save();
-            ctx.strokeStyle = "rgba(20, 184, 166, 0.78)";
-            ctx.lineWidth = 1.25 / zoom;
+            ctx.strokeStyle = "rgba(20, 184, 166, 0.75)";
+            ctx.lineWidth = 1.2 / zoom;
             ctx.setLineDash([5 / zoom, 4 / zoom]);
             ctx.strokeRect(rx, ry, rw, rh);
             ctx.restore();
@@ -275,27 +279,27 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
           if (activeHeatmap?.peak_x != null && activeHeatmap?.peak_y != null) {
             const px = dx + activeHeatmap.peak_x * side;
             const py = dy + activeHeatmap.peak_y * side;
-            const r = 8.5 / zoom;
+            const r = 8 / zoom;
             ctx.save();
             ctx.strokeStyle = "#f1f5f8";
-            ctx.lineWidth = 1.4 / zoom;
+            ctx.lineWidth = 1.3 / zoom;
             ctx.beginPath();
             ctx.arc(px, py, r, 0, Math.PI * 2);
-            ctx.moveTo(px - r * 1.75, py);
+            ctx.moveTo(px - r * 1.7, py);
             ctx.lineTo(px - r * 0.65, py);
             ctx.moveTo(px + r * 0.65, py);
-            ctx.lineTo(px + r * 1.75, py);
-            ctx.moveTo(px, py - r * 1.75);
+            ctx.lineTo(px + r * 1.7, py);
+            ctx.moveTo(px, py - r * 1.7);
             ctx.lineTo(px, py - r * 0.65);
             ctx.moveTo(px, py + r * 0.65);
-            ctx.lineTo(px, py + r * 1.75);
+            ctx.lineTo(px, py + r * 1.7);
             ctx.stroke();
             ctx.restore();
           }
         }
       }
 
-      // 4. Caliper Measurements
+      // Caliper Measurements
       const allCalipers = draftCaliper
         ? [
             ...calipers,
@@ -317,7 +321,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
         ctx.save();
         ctx.strokeStyle = "#14b8a6";
         ctx.fillStyle = "#14b8a6";
-        ctx.lineWidth = 1.65 / zoom;
+        ctx.lineWidth = 1.6 / zoom;
         ctx.beginPath();
         ctx.moveTo(cx1, cy1);
         ctx.lineTo(cx2, cy2);
@@ -328,7 +332,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
           [cx2, cy2],
         ].forEach(([ex, ey]) => {
           ctx.beginPath();
-          ctx.arc(ex, ey, 3.2 / zoom, 0, Math.PI * 2);
+          ctx.arc(ex, ey, 3 / zoom, 0, Math.PI * 2);
           ctx.fill();
         });
 
@@ -365,8 +369,8 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
       ctx.restore();
 
       ctx.save();
-      ctx.strokeStyle = "rgba(20, 184, 166, 0.82)";
-      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = "rgba(20, 184, 166, 0.85)";
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(splitX, 0);
       ctx.lineTo(splitX, h);
@@ -376,29 +380,26 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
       drawScene(true);
     }
 
-    // 5. Etched DICOM Left-Edge Millimeter Scale Ruler (Authentic Radiology Craft)
+    // Subtle Left-Edge Scale Ruler
     ctx.save();
-    const rulerTop = h * 0.2;
-    const rulerBot = h * 0.8;
-    const ticks = 20;
-    ctx.strokeStyle = "rgba(241, 245, 248, 0.28)";
+    const rulerTop = h * 0.22;
+    const rulerBot = h * 0.78;
+    const ticks = 16;
+    ctx.strokeStyle = "rgba(241, 245, 248, 0.22)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(14, rulerTop);
     ctx.lineTo(14, rulerBot);
     for (let i = 0; i <= ticks; i++) {
       const ty = rulerTop + ((rulerBot - rulerTop) * i) / ticks;
-      const len = i % 5 === 0 ? 8 : 4;
+      const len = i % 4 === 0 ? 7 : 3.5;
       ctx.moveTo(14, ty);
       ctx.lineTo(14 + len, ty);
     }
     ctx.stroke();
-    ctx.fillStyle = "rgba(241, 245, 248, 0.36)";
-    ctx.font = '9px "IBM Plex Mono", monospace';
-    ctx.fillText("200mm", 12, rulerBot + 14);
     ctx.restore();
 
-    // 6. 2.5× Optical Magnifier Loupe
+    // 2.5× Optical Magnifier Loupe
     if (loupeActive && pointer.inside && !caliperMode && !isDraggingSplit) {
       const radius = 82;
       const mag = 2.5;
@@ -422,21 +423,13 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
       ctx.beginPath();
       ctx.arc(lx, ly, radius, 0, Math.PI * 2);
       ctx.stroke();
-
-      ctx.strokeStyle = "rgba(241, 245, 248, 0.38)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(lx - 11, ly);
-      ctx.lineTo(lx + 11, ly);
-      ctx.moveTo(lx, ly - 11);
-      ctx.lineTo(lx, ly + 11);
-      ctx.stroke();
       ctx.restore();
     }
   }, [
     baseImg,
     heatImg,
     anatImg,
+    viewMode,
     showHeatmap,
     showAnatomy,
     heatmapOpacity,
@@ -535,7 +528,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setWindowPreset("standard");
-    setSplitCompare(false);
+    setViewMode("heatmap");
     setLoupeActive(false);
     setCaliperMode(false);
     setCalipers([]);
@@ -555,43 +548,43 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
   );
   const visiblePredictions = useMemo(() => {
     if (showAllPathologies) return predictions;
-    const topSix = predictions.slice(0, 6);
-    const extraPositives = positives.filter((p) => !topSix.some((t) => t.name === p.name));
-    return [...topSix, ...extraPositives];
+    const topFive = predictions.slice(0, 5);
+    const extraPositives = positives.filter((p) => !topFive.some((t) => t.name === p.name));
+    return [...topFive, ...extraPositives];
   }, [predictions, positives, showAllPathologies]);
 
   const leadPositive = positives[0] || null;
   const anatomy = predictionData?.anatomy || null;
   const decision = predictionData?.decision_summary || null;
-  const triageLevel =
+  const rawTriage =
     predictionData?.report?.triage_level || (positives.length ? "URGENT" : "ROUTINE");
+  const triageLabel = formatTriageLabel(rawTriage);
   const isCritical = Boolean(
-    predictionData?.report?.critical_alert || triageLevel.toUpperCase().includes("STAT")
+    predictionData?.report?.critical_alert || rawTriage.toUpperCase().includes("STAT")
   );
   const ctr = anatomy?.ctr ?? null;
   const ctrPct = ctr != null ? Math.min(100, Math.max(0, ((ctr - 0.3) / 0.4) * 100)) : 0;
 
   return (
-    <div className="mx-auto max-w-[1360px] px-5 py-7 pb-24 md:px-8 md:py-9 lg:pb-12">
-      {/* Page Header + Fast Study Switcher */}
-      <div className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
-        <div className="space-y-1.5">
-          <div
-            className="font-mono-tech text-[10px] font-medium tracking-[0.2em] uppercase"
-            style={{ color: "var(--accent-clinical)" }}
-          >
-            02 · DIAGNOSTIC SCAN STUDIO
-          </div>
-          <h1 className="font-display text-3xl font-bold sm:text-4xl">
-            Inspect film &amp;{" "}
-            <span className="font-serif-editorial font-normal" style={{ color: "var(--accent-clinical)" }}>
-              localized evidence.
+    <div className="mx-auto max-w-[1280px] px-5 py-6 pb-24 md:px-8 md:py-7 lg:pb-10">
+      {/* Compact Single-Line Studio Header + Non-Wrapping Study Pill Bar */}
+      <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+        <div>
+          <h1 className="font-display text-2xl font-bold sm:text-3xl">
+            Scan{" "}
+            <span
+              className="font-serif-editorial font-normal"
+              style={{ color: "var(--accent-clinical)" }}
+            >
+              Studio
             </span>
           </h1>
+          <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
+            Click any pathology on the right to localize its Grad-CAM++ heatmap.
+          </p>
         </div>
 
-        {/* Clean Benchmark Case Switcher Strip */}
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto pb-1 xl:pb-0">
           {samples.map((s) => {
             const active = activeStudyId === s.id;
             return (
@@ -600,114 +593,239 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                 type="button"
                 disabled={isAnalyzing}
                 onClick={() => onSelectSample(s)}
-                className="cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition-all disabled:opacity-50"
+                className="shrink-0 cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all hover:border-teal-500/40 disabled:opacity-50"
                 style={{
                   borderColor: active ? "var(--accent-clinical)" : "var(--border-subtle)",
                   backgroundColor: active ? "var(--accent-clinical-dim)" : "var(--bg-elevated)",
                   color: active ? "var(--text-primary)" : "var(--text-secondary)",
                 }}
               >
-                {cleanSampleTitle(s.name)}
+                {shortSampleTitle(s.name)}
               </button>
             );
           })}
           <button
             type="button"
             onClick={onUploadClick}
-            className="flex cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-transform active:scale-95"
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors hover:border-teal-500/50"
             style={{
-              backgroundColor: "var(--text-primary)",
-              color: "var(--bg-primary)",
+              borderColor: "var(--border-strong)",
+              backgroundColor: "var(--bg-elevated)",
+              color: "var(--text-primary)",
             }}
           >
-            <Upload className="h-3.5 w-3.5" />
-            <span>Upload Film</span>
+            <Upload className="h-3.5 w-3.5" style={{ color: "var(--accent-clinical)" }} />
+            <span>Upload</span>
           </button>
         </div>
       </div>
 
-      {/* Main 2-Column Studio Grid */}
-      <div className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12">
-        {/* LEFT 7 COLS: Precision DICOM Lightbox */}
-        <div className="lg:col-span-7 space-y-3.5">
-          {/* Top 4-Mode Overlay Strip — Crisp Single Horizontal Row even at 1280px */}
-          <div className="atelier-card flex flex-wrap items-center justify-between gap-2 rounded-2xl px-3 py-2 xl:flex-nowrap">
-            <div className="flex flex-wrap items-center gap-1 xl:flex-nowrap">
-              {[
-                {
-                  label: "Grad-CAM++",
-                  icon: Eye,
-                  active: showHeatmap,
-                  onClick: () => setShowHeatmap((v) => !v),
-                },
-                {
-                  label: "Anatomy & CTR",
-                  icon: Layers,
-                  active: showAnatomy,
-                  onClick: () => setShowAnatomy((v) => !v),
-                },
-                {
-                  label: "Split Compare",
-                  icon: Columns2,
-                  active: splitCompare,
-                  onClick: () => setSplitCompare((v) => !v),
-                },
-                {
-                  label: "2.5× Loupe",
-                  icon: Search,
-                  active: loupeActive,
-                  onClick: () => {
-                    setLoupeActive((v) => !v);
-                    setCaliperMode(false);
-                  },
-                },
-              ].map((ctrl) => {
-                const Icon = ctrl.icon;
+      {/* Main 2-Column Workspace */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        {/* LEFT 7 COLS: Calm Radiograph Lightbox */}
+        <div className="lg:col-span-7 space-y-3">
+          {/* Unified 4-Mode Segmented Control + Progressive Disclosure Tools Button */}
+          <div className="atelier-card flex flex-wrap items-center justify-between gap-2 rounded-2xl px-2.5 py-2">
+            <div
+              className="inline-flex items-center gap-0.5 rounded-full p-0.5"
+              style={{ backgroundColor: "var(--bg-secondary)" }}
+            >
+              {(
+                [
+                  { id: "heatmap", label: "Heatmap", icon: Eye },
+                  { id: "anatomy", label: "Anatomy", icon: Layers },
+                  { id: "compare", label: "Compare", icon: Columns2 },
+                  { id: "original", label: "Original", icon: ImageIcon },
+                ] as const
+              ).map((m) => {
+                const Icon = m.icon;
+                const active = viewMode === m.id;
                 return (
                   <button
-                    key={ctrl.label}
+                    key={m.id}
                     type="button"
-                    onClick={ctrl.onClick}
-                    className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all"
+                    onClick={() => setViewMode(m.id)}
+                    className="relative z-10 flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors"
                     style={{
-                      borderColor: ctrl.active ? "var(--accent-clinical)" : "var(--border-subtle)",
-                      backgroundColor: ctrl.active ? "var(--accent-clinical-dim)" : "transparent",
-                      color: ctrl.active ? "var(--text-primary)" : "var(--text-secondary)",
+                      color: active ? "var(--text-primary)" : "var(--text-secondary)",
                     }}
                   >
+                    {active && (
+                      <motion.span
+                        layoutId="studio-view-mode"
+                        transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                        className="absolute inset-0 -z-10 rounded-full border"
+                        style={{
+                          backgroundColor: "var(--bg-elevated)",
+                          borderColor: "var(--border-strong)",
+                        }}
+                      />
+                    )}
                     <Icon
-                      className="h-3 w-3 shrink-0"
-                      style={{ color: ctrl.active ? "var(--accent-clinical)" : "var(--text-muted)" }}
+                      className="h-3.5 w-3.5"
+                      style={{ color: active ? "var(--accent-clinical)" : "var(--text-muted)" }}
                     />
-                    <span>{ctrl.label}</span>
+                    <span>{m.label}</span>
                   </button>
                 );
               })}
             </div>
 
-            {showHeatmap && (
-              <div className="flex shrink-0 items-center gap-1.5 pl-1">
-                <span
-                  className="font-mono-tech text-[9.5px] uppercase whitespace-nowrap"
-                  style={{ color: "var(--text-muted)" }}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setToolsOpen((v) => !v)}
+                className="flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:border-teal-500/40"
+                style={{
+                  borderColor:
+                    toolsOpen || loupeActive || caliperMode || windowPreset !== "standard"
+                      ? "var(--accent-clinical)"
+                      : "var(--border-subtle)",
+                  backgroundColor: toolsOpen ? "var(--accent-clinical-dim)" : "transparent",
+                  color: toolsOpen ? "var(--text-primary)" : "var(--text-secondary)",
+                }}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                <span>Adjust</span>
+              </button>
+
+              {(zoom > 1 || windowPreset !== "standard" || calipers.length > 0 || loupeActive || caliperMode) && (
+                <button
+                  type="button"
+                  onClick={resetView}
+                  title="Reset view"
+                  aria-label="Reset viewer"
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border transition-colors hover:border-teal-500/40"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
                 >
-                  {Math.round(heatmapOpacity * 100)}%
-                </span>
-                <input
-                  type="range"
-                  min={0.15}
-                  max={1}
-                  step={0.05}
-                  value={heatmapOpacity}
-                  onChange={(e) => setHeatmapOpacity(Number(e.target.value))}
-                  aria-label="Heatmap opacity"
-                  className="clinical-slider w-14"
-                />
-              </div>
-            )}
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Pure Carbon Film Plate */}
+          {/* Smooth Collapsible Precision Image Controls (Progressive Disclosure) */}
+          <AnimatePresence initial={false}>
+            {toolsOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="overflow-hidden"
+              >
+                <div className="atelier-card flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3">
+                  {/* Window/Level Presets */}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {WINDOW_PRESETS.map((wp) => {
+                      const active = windowPreset === wp.id;
+                      return (
+                        <button
+                          key={wp.id}
+                          type="button"
+                          onClick={() => setWindowPreset(wp.id)}
+                          className="cursor-pointer rounded-full px-2.5 py-1 text-[11.5px] font-medium transition-colors"
+                          style={{
+                            backgroundColor: active ? "var(--text-primary)" : "var(--bg-secondary)",
+                            color: active ? "var(--bg-primary)" : "var(--text-secondary)",
+                          }}
+                        >
+                          {wp.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Opacity + Colormap + Loupe + Caliper */}
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {showHeatmap && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                          Opacity {Math.round(heatmapOpacity * 100)}%
+                        </span>
+                        <input
+                          type="range"
+                          min={0.15}
+                          max={1}
+                          step={0.05}
+                          value={heatmapOpacity}
+                          onChange={(e) => setHeatmapOpacity(Number(e.target.value))}
+                          aria-label="Heatmap opacity"
+                          className="clinical-slider w-16"
+                        />
+                      </div>
+                    )}
+
+                    <select
+                      aria-label="Heatmap Colormap"
+                      value={colormap}
+                      onChange={(e) => onColormapChange(e.target.value as ColormapName)}
+                      className="cursor-pointer rounded-full border px-2.5 py-1 text-[11.5px] focus:outline-none"
+                      style={{
+                        borderColor: "var(--border-subtle)",
+                        backgroundColor: "var(--bg-secondary)",
+                        color: "var(--text-primary)",
+                      }}
+                    >
+                      {COLORMAP_OPTIONS.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.label} Map
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoupeActive((v) => !v);
+                        setCaliperMode(false);
+                      }}
+                      className="flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-[11.5px] font-medium"
+                      style={{
+                        borderColor: loupeActive ? "var(--accent-clinical)" : "var(--border-subtle)",
+                        backgroundColor: loupeActive ? "var(--accent-clinical-dim)" : "transparent",
+                        color: loupeActive ? "var(--text-primary)" : "var(--text-secondary)",
+                      }}
+                    >
+                      <Search className="h-3 w-3" />
+                      <span>2.5× Loupe</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCaliperMode((v) => !v);
+                        setLoupeActive(false);
+                      }}
+                      className="flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-[11.5px] font-medium"
+                      style={{
+                        borderColor: caliperMode ? "var(--accent-clinical)" : "var(--border-subtle)",
+                        backgroundColor: caliperMode ? "var(--accent-clinical-dim)" : "transparent",
+                        color: caliperMode ? "var(--text-primary)" : "var(--text-secondary)",
+                      }}
+                    >
+                      <Ruler className="h-3 w-3" />
+                      <span>Measure</span>
+                    </button>
+
+                    {calipers.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setCalipers([])}
+                        title="Clear measurements"
+                        className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border"
+                        style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Clean Carbon Film Lightbox */}
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -715,7 +833,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
             }}
             onDragLeave={() => setIsDragOver(false)}
             onDrop={handleDrop}
-            className="relative aspect-square w-full overflow-hidden rounded-[26px] border transition-all"
+            className="relative aspect-square w-full overflow-hidden rounded-[24px] border transition-all"
             style={{
               backgroundColor: "var(--bg-film)",
               borderColor: isDragOver ? "var(--accent-clinical)" : "var(--border-strong)",
@@ -741,68 +859,50 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
               }}
             />
 
-            {/* Tangible Frosted Glass Split-Compare Grip Handle */}
+            {/* Draggable Split-Compare Handle */}
             {splitCompare && !holdingSpace && (
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-teal-400/70 bg-black/80 text-teal-300 shadow-xl backdrop-blur-md"
+                className="pointer-events-none absolute top-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-teal-400/75 bg-black/82 text-teal-300 shadow-xl backdrop-blur-md"
                 style={{ left: `${splitPos * 100}%` }}
               >
                 <MoveHorizontal className="h-4 w-4" />
               </div>
             )}
 
-            {/* Top Left DICOM Film Metadata */}
-            <div className="pointer-events-none absolute top-4 left-4 flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-white/15 bg-black/78 px-3 py-1 font-mono-tech text-[10px] tracking-[0.14em] text-slate-200 uppercase backdrop-blur-md">
-                {activeStudyName}
-              </span>
-              {decision?.projection_view && (
-                <span className="rounded-full border border-white/12 bg-black/72 px-2.5 py-1 font-mono-tech text-[10px] text-slate-300 backdrop-blur-md">
-                  {decision.projection_view.replace(/_/g, " ")}
-                </span>
-              )}
-              {holdingSpace && (
-                <span className="rounded-full border border-teal-400/60 bg-black/88 px-2.5 py-1 font-mono-tech text-[10px] text-teal-400">
-                  RAW FILM (SPACE)
-                </span>
-              )}
-            </div>
-
-            {/* Top Right Active Localization Pill */}
-            {activePathology && (
-              <div className="pointer-events-none absolute top-4 right-4 flex items-center gap-2 rounded-full border border-white/15 bg-black/80 px-3.5 py-1.5 backdrop-blur-md">
+            {/* Single Clean Localization Badge (No Redundant Top-Left Badges) */}
+            {activePathology && viewMode !== "original" && !holdingSpace && (
+              <div className="pointer-events-none absolute top-3.5 right-3.5 flex items-center gap-2 rounded-full border border-white/14 bg-black/78 px-3 py-1.5 backdrop-blur-md">
                 <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
-                <span className="font-mono-tech text-[10.5px] font-medium text-white">
+                <span className="text-[11px] font-medium text-white">
                   {formatPathology(activePathology)}
                 </span>
                 {activeHeatmap?.anatomical_zone && (
-                  <span className="hidden border-l border-white/15 pl-2 font-mono-tech text-[10px] text-slate-300 sm:inline">
+                  <span className="hidden border-l border-white/15 pl-2 text-[11px] text-slate-300 sm:inline">
                     {activeHeatmap.anatomical_zone}
                   </span>
                 )}
               </div>
             )}
 
-            {/* Radiographic R / L Orientation Markers */}
-            <span className="pointer-events-none absolute top-14 left-4 font-mono-tech text-[10px] font-semibold text-white/40">
-              R
-            </span>
-            <span className="pointer-events-none absolute top-14 right-4 font-mono-tech text-[10px] font-semibold text-white/40">
-              L
-            </span>
+            {holdingSpace && (
+              <div className="pointer-events-none absolute top-3.5 left-3.5 rounded-full border border-teal-400/60 bg-black/85 px-3 py-1 font-mono-tech text-[10px] text-teal-300">
+                Original X-Ray (Space)
+              </div>
+            )}
 
-            {/* Bottom Live Optical Telemetry Bar (Coordinates & Zoom) */}
-            <div className="pointer-events-none absolute right-4 bottom-3.5 left-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            {/* Minimal Bottom Telemetry (Only when relevant) */}
+            <div className="pointer-events-none absolute right-3.5 bottom-3.5 left-3.5 flex items-center justify-between">
+              <div>
                 {splitCompare && !holdingSpace ? (
-                  <span className="rounded-full border border-white/12 bg-black/78 px-2.5 py-1 font-mono-tech text-[9.5px] tracking-[0.14em] text-slate-300 uppercase">
-                    RAW FILM
+                  <span className="rounded-full border border-white/12 bg-black/75 px-2.5 py-1 font-mono-tech text-[10px] text-slate-200">
+                    Original
                   </span>
                 ) : (
-                  pointer.inside && (
-                    <span className="rounded-full border border-white/12 bg-black/75 px-2.5 py-1 font-mono-tech text-[9.5px] text-slate-300 backdrop-blur-md">
-                      X {pointer.nx.toFixed(2)} · Y {pointer.ny.toFixed(2)} · {zoom.toFixed(1)}×
+                  pointer.inside &&
+                  zoom > 1 && (
+                    <span className="rounded-full border border-white/12 bg-black/75 px-2.5 py-1 font-mono-tech text-[10px] text-slate-200">
+                      {zoom.toFixed(1)}× Zoom
                     </span>
                   )
                 )}
@@ -810,30 +910,21 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
 
               <div className="flex items-center gap-2">
                 {splitCompare && !holdingSpace && (
-                  <span className="rounded-full border border-teal-400/40 bg-black/78 px-2.5 py-1 font-mono-tech text-[9.5px] tracking-[0.14em] text-teal-400 uppercase">
-                    AI OVERLAY
+                  <span className="rounded-full border border-teal-400/40 bg-black/75 px-2.5 py-1 font-mono-tech text-[10px] text-teal-300">
+                    AI Overlay
                   </span>
                 )}
                 {heatmapLoading && !isAnalyzing && (
-                  <span className="rounded-full border border-white/15 bg-black/82 px-3 py-1 font-mono-tech text-[10px] text-slate-200 backdrop-blur-md">
-                    Computing Grad-CAM++...
+                  <span className="rounded-full border border-white/15 bg-black/80 px-3 py-1 font-mono-tech text-[10px] text-slate-200">
+                    Updating heatmap...
                   </span>
                 )}
               </div>
             </div>
 
             {caliperMode && (
-              <div className="pointer-events-none absolute bottom-12 left-1/2 -translate-x-1/2 rounded-full border border-teal-400/45 bg-black/85 px-3.5 py-1.5 font-mono-tech text-[10px] text-teal-400 backdrop-blur-md">
-                Click &amp; drag across anatomy to measure (mm)
-              </div>
-            )}
-
-            {isDragOver && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/82 backdrop-blur-sm">
-                <Upload className="h-8 w-8 text-teal-400" />
-                <div className="font-display text-lg font-semibold text-white">
-                  Drop Chest Radiograph or DICOM
-                </div>
+              <div className="pointer-events-none absolute bottom-12 left-1/2 -translate-x-1/2 rounded-full border border-teal-400/45 bg-black/85 px-3.5 py-1.5 text-[11px] text-teal-300 backdrop-blur-md">
+                Click &amp; drag across the image to measure in mm
               </div>
             )}
 
@@ -843,133 +934,36 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                   className="scan-beam h-24 w-full"
                   style={{
                     background:
-                      "linear-gradient(180deg, transparent, rgba(20, 184, 166, 0.3), transparent)",
+                      "linear-gradient(180deg, transparent, rgba(20, 184, 166, 0.28), transparent)",
                   }}
                 />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex items-center gap-3 rounded-full border border-white/15 bg-black/88 px-5 py-2.5 font-mono-tech text-xs text-white shadow-2xl">
+                  <div className="flex items-center gap-2.5 rounded-full border border-white/15 bg-black/88 px-4 py-2 text-xs font-medium text-white shadow-2xl">
                     <span className="h-2 w-2 rounded-full bg-teal-400 clinical-led" />
-                    <span>Running 3-Backbone Ensemble + Gemini Decision 1...</span>
+                    <span>Analyzing radiograph...</span>
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Bottom Window/Level + Colormap + Caliper Bar */}
-          <div className="atelier-card flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-2.5">
-            <div className="flex flex-wrap items-center gap-1">
-              {WINDOW_PRESETS.map((wp) => {
-                const active = windowPreset === wp.id;
-                return (
-                  <button
-                    key={wp.id}
-                    type="button"
-                    onClick={() => setWindowPreset(wp.id)}
-                    className="cursor-pointer rounded-full px-3 py-1 text-xs font-medium transition-colors"
-                    style={{
-                      backgroundColor: active ? "var(--text-primary)" : "transparent",
-                      color: active ? "var(--bg-primary)" : "var(--text-secondary)",
-                    }}
-                  >
-                    {wp.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div
-                className="flex items-center gap-1.5 rounded-full border px-2.5 py-1"
-                style={{ borderColor: "var(--border-subtle)" }}
-              >
-                <span
-                  className="font-mono-tech text-[9.5px] tracking-[0.12em] uppercase"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Map
-                </span>
-                <select
-                  aria-label="Heatmap Colormap"
-                  value={colormap}
-                  onChange={(e) => onColormapChange(e.target.value as ColormapName)}
-                  className="cursor-pointer bg-transparent font-mono-tech text-[11px] focus:outline-none"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  {COLORMAP_OPTIONS.map((c) => (
-                    <option
-                      key={c.id}
-                      value={c.id}
-                      style={{
-                        backgroundColor: "var(--bg-elevated)",
-                        color: "var(--text-primary)",
-                      }}
-                    >
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setCaliperMode((v) => !v);
-                  setLoupeActive(false);
-                }}
-                className="flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
-                style={{
-                  borderColor: caliperMode ? "var(--accent-clinical)" : "var(--border-subtle)",
-                  backgroundColor: caliperMode ? "var(--accent-clinical-dim)" : "transparent",
-                  color: caliperMode ? "var(--text-primary)" : "var(--text-secondary)",
-                }}
-              >
-                <Ruler className="h-3.5 w-3.5" />
-                <span>Caliper</span>
-              </button>
-
-              {calipers.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setCalipers([])}
-                  title="Clear caliper measurements"
-                  className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border transition-opacity hover:opacity-80"
-                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={resetView}
-                title="Reset viewer"
-                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border transition-opacity hover:opacity-80"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-
           <div
-            className="flex flex-wrap items-center justify-between px-2 font-mono-tech text-[10px]"
+            className="flex items-center justify-between px-1 text-[11px]"
             style={{ color: "var(--text-muted)" }}
           >
-            <span>Hold Space = Peek raw radiograph · Ctrl + Scroll = Zoom</span>
-            <span>Ctrl + V = Paste radiograph from clipboard</span>
+            <span>Hold Space to peek original X-ray</span>
+            <span>Ctrl + Scroll to zoom</span>
           </div>
         </div>
 
-        {/* RIGHT 5 COLS: Crystal-Clear Clinical Verdict Panel */}
+        {/* RIGHT 5 COLS: Clear Diagnostic Summary + Scannable Findings */}
         <div className="lg:col-span-5 space-y-5">
-          <SpotlightCard strong className="rounded-[26px] p-6 space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Primary Diagnostic Verdict */}
+          <SpotlightCard strong className="rounded-[24px] p-5 sm:p-6 space-y-5">
+            <div className="flex items-center justify-between gap-2">
               <span
-                className="inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono-tech text-[10px] font-medium tracking-[0.14em] uppercase"
+                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
                 style={{
-                  borderColor:
-                    isCritical || leadPositive ? "var(--accent-alert)" : "var(--accent-clinical)",
                   backgroundColor:
                     isCritical || leadPositive
                       ? "var(--accent-alert-dim)"
@@ -978,56 +972,37 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                     isCritical || leadPositive ? "var(--accent-alert)" : "var(--accent-clinical)",
                 }}
               >
-                <span className="relative flex h-2 w-2 items-center justify-center">
-                  {(isCritical || leadPositive) && (
-                    <span
-                      className="clinical-ripple absolute inset-0 rounded-full"
-                      style={{ backgroundColor: "var(--accent-alert)" }}
-                    />
-                  )}
-                  <span
-                    className="relative h-1.5 w-1.5 rounded-full"
-                    style={{
-                      backgroundColor:
-                        isCritical || leadPositive
-                          ? "var(--accent-alert)"
-                          : "var(--accent-clinical)",
-                    }}
-                  />
-                </span>
-                {triageLevel}
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{
+                    backgroundColor:
+                      isCritical || leadPositive
+                        ? "var(--accent-alert)"
+                        : "var(--accent-clinical)",
+                  }}
+                />
+                {triageLabel}
               </span>
 
               {decision?.active && (
                 <span
-                  className="inline-flex items-center gap-1.5 font-mono-tech text-[10px]"
-                  style={{ color: "var(--text-secondary)" }}
+                  className="inline-flex items-center gap-1 text-[11px]"
+                  style={{ color: "var(--text-muted)" }}
                 >
                   <Sparkles className="h-3 w-3" style={{ color: "var(--accent-clinical)" }} />
-                  <span>
-                    Decision 1 · Q{" "}
-                    {decision.image_quality_score != null
-                      ? `${decision.image_quality_score.toFixed(1)}/5`
-                      : "OK"}
-                  </span>
+                  <span>Gemini Fused</span>
                 </span>
               )}
             </div>
 
-            <div className="space-y-1.5">
-              <div
-                className="font-mono-tech text-[10px] tracking-[0.16em] uppercase"
-                style={{ color: "var(--text-muted)" }}
-              >
-                PRIMARY DIAGNOSTIC VERDICT
-              </div>
+            <div className="space-y-1">
               <div className="flex items-baseline justify-between gap-4">
-                <h2 className="font-display text-2xl font-bold sm:text-3xl">
+                <h2 className="font-display text-2xl font-bold sm:text-[26px]">
                   {leadPositive
                     ? formatPathology(leadPositive.name)
                     : predictionData
                     ? "No Acute Findings"
-                    : "Awaiting Study"}
+                    : "Loading..."}
                 </h2>
                 {leadPositive && (
                   <AnimatedNumber
@@ -1039,30 +1014,30 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                   />
                 )}
               </div>
-              <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
                 {leadPositive
                   ? PATHOLOGY_CLINICAL_NOTE[leadPositive.name]?.plain ||
-                    "Localized thoracic abnormality detected above operating cutoff."
+                    "Abnormality detected above threshold."
                   : predictionData
-                  ? "All 14 evaluated thoracic pathologies fall below the active clinical decision threshold."
-                  : "Upload a frontal chest radiograph or choose a benchmark case above."}
+                  ? "All 14 evaluated conditions are below the active threshold."
+                  : "Upload an X-ray or choose a sample study above."}
               </p>
             </div>
 
-            {/* Precision Calibrated CTR Gauge with Micro-Ticks */}
+            {/* Clean Heart Size (CTR) Bar */}
             <div
-              className="rounded-2xl border p-4 space-y-2.5"
+              className="rounded-2xl border p-3.5 space-y-2"
               style={{
                 borderColor: "var(--border-subtle)",
                 backgroundColor: "var(--bg-secondary)",
               }}
             >
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-xs font-semibold">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 font-medium">
                   <HeartPulse className="h-3.5 w-3.5" style={{ color: "var(--accent-clinical)" }} />
-                  <span>Cardiothoracic Ratio (CTR)</span>
+                  Heart Size (CTR)
                 </span>
-                <div className="flex items-center gap-2 font-mono-tech text-xs">
+                <div className="flex items-center gap-2 font-mono-tech">
                   <AnimatedNumber
                     value={ctr}
                     decimals={3}
@@ -1074,39 +1049,31 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                           : "var(--accent-clinical)",
                     }}
                   />
-                  <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                    {anatomy?.ctr_status || "Pending"}
+                  <span className="text-[10.5px]" style={{ color: "var(--text-muted)" }}>
+                    {ctr != null ? (ctr > 0.53 ? "Enlarged" : ctr > 0.5 ? "Borderline" : "Normal") : "—"}
                   </span>
                 </div>
               </div>
 
               <div
-                className="relative h-2 w-full rounded-full"
+                className="relative h-1.5 w-full rounded-full"
                 style={{ backgroundColor: "var(--border-subtle)" }}
               >
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${ctrPct}%` }}
-                  transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                   className="h-full rounded-full"
                   style={{
                     backgroundColor:
                       ctr != null && ctr > 0.5 ? "var(--accent-alert)" : "var(--accent-clinical)",
                   }}
                 />
-                {/* Minor scale ticks */}
-                {[25, 50, 75].map((pct) => (
-                  <div
-                    key={pct}
-                    className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
-                    style={{
-                      left: `${pct}%`,
-                      width: pct === 50 ? 2 : 1,
-                      height: pct === 50 ? 14 : 8,
-                      backgroundColor: pct === 50 ? "var(--text-primary)" : "var(--border-strong)",
-                    }}
-                  />
-                ))}
+                <div
+                  className="absolute top-1/2 left-1/2 h-3 w-[1.5px] -translate-x-1/2 -translate-y-1/2"
+                  style={{ backgroundColor: "var(--text-primary)" }}
+                  title="0.50 clinical cutoff"
+                />
               </div>
 
               <div
@@ -1114,207 +1081,194 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                 style={{ color: "var(--text-muted)" }}
               >
                 <span>0.30</span>
-                <span>0.50 Cutoff</span>
-                <span>
-                  L {anatomy?.left_lung_pct != null ? `${anatomy.left_lung_pct.toFixed(1)}%` : "—"} ·
-                  R{" "}
-                  {anatomy?.right_lung_pct != null ? `${anatomy.right_lung_pct.toFixed(1)}%` : "—"}
-                </span>
+                <span>0.50 normal limit</span>
+                <span>0.70</span>
               </div>
             </div>
 
-            {/* Direct Page Navigation Buttons */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => onNavigatePage("consensus")}
-                className="group flex cursor-pointer items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition-colors"
-                style={{
-                  borderColor: "var(--border-subtle)",
-                  backgroundColor: "var(--bg-secondary)",
-                }}
-              >
-                <span>Consensus &amp; CTR</span>
-                <ArrowRight
-                  className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                  style={{ color: "var(--accent-clinical)" }}
-                />
-              </button>
+            {/* Clear Primary Next Step + Secondary Link */}
+            <div className="flex items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => onNavigatePage("report")}
-                className="group flex cursor-pointer items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition-colors"
+                className="group flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-full py-2.5 text-xs font-semibold transition-all hover:brightness-110 active:scale-[0.98]"
                 style={{
-                  borderColor: "var(--border-subtle)",
-                  backgroundColor: "var(--bg-secondary)",
+                  backgroundColor: "var(--accent-clinical)",
+                  color: "#ffffff",
                 }}
               >
-                <span>ACR Report &amp; AI</span>
-                <ArrowRight
-                  className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                  style={{ color: "var(--accent-clinical)" }}
-                />
+                <span>Open Report &amp; AI Chat</span>
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigatePage("consensus")}
+                className="cursor-pointer rounded-full border px-3.5 py-2.5 text-xs font-medium transition-colors hover:border-teal-500/40"
+                style={{
+                  borderColor: "var(--border-strong)",
+                  color: "var(--text-primary)",
+                }}
+              >
+                4-Model View
               </button>
             </div>
           </SpotlightCard>
 
-          {/* Ranked Pathology Confidence Card */}
-          <SpotlightCard className="rounded-[26px] p-6 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Activity className="h-3.5 w-3.5" style={{ color: "var(--accent-clinical)" }} />
-                  <h3 className="font-display text-sm font-bold">Pathology Confidence</h3>
-                </div>
-                <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  Select any condition to render its Grad-CAM++ map.
-                </p>
+          {/* Ranked Findings Card (Top 5 Clean Default + Collapsible Cutoff) */}
+          <SpotlightCard className="rounded-[24px] p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Activity className="h-4 w-4" style={{ color: "var(--accent-clinical)" }} />
+                <h3 className="font-display text-sm font-bold">Top Findings</h3>
               </div>
 
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal className="h-3 w-3" style={{ color: "var(--text-muted)" }} />
-                <span
-                  className="font-mono-tech text-[10px]"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  Cutoff {Math.round(threshold * 100)}%
-                </span>
-                <input
-                  type="range"
-                  min={0.25}
-                  max={0.75}
-                  step={0.05}
-                  value={threshold}
-                  onChange={(e) => onThresholdChange(Number(e.target.value))}
-                  aria-label="Diagnostic cutoff threshold"
-                  className="clinical-slider w-16"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => setCutoffOpen((v) => !v)}
+                className="flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono-tech text-[10.5px] transition-colors hover:border-teal-500/40"
+                style={{
+                  borderColor: cutoffOpen ? "var(--accent-clinical)" : "var(--border-subtle)",
+                  color: "var(--text-secondary)",
+                }}
+              >
+                <SlidersHorizontal className="h-3 w-3" />
+                <span>Threshold {Math.round(threshold * 100)}%</span>
+              </button>
             </div>
 
+            <AnimatePresence initial={false}>
+              {cutoffOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="overflow-hidden"
+                >
+                  <div
+                    className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-xs"
+                    style={{
+                      borderColor: "var(--border-subtle)",
+                      backgroundColor: "var(--bg-secondary)",
+                    }}
+                  >
+                    <span style={{ color: "var(--text-secondary)" }}>Detection cutoff</span>
+                    <input
+                      type="range"
+                      min={0.25}
+                      max={0.75}
+                      step={0.05}
+                      value={threshold}
+                      onChange={(e) => onThresholdChange(Number(e.target.value))}
+                      aria-label="Diagnostic cutoff threshold"
+                      className="clinical-slider w-28"
+                    />
+                    <span className="font-mono-tech font-semibold">
+                      {Math.round(threshold * 100)}%
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="space-y-1.5">
-              <AnimatePresence initial={false}>
-                {visiblePredictions.map((pred) => {
-                  const isPos = pred.score >= threshold;
-                  const isSelected = activePathology === pred.name;
-                  const note = PATHOLOGY_CLINICAL_NOTE[pred.name];
+              {visiblePredictions.map((pred) => {
+                const isPos = pred.score >= threshold;
+                const isSelected = activePathology === pred.name;
+                const note = PATHOLOGY_CLINICAL_NOTE[pred.name];
 
-                  return (
-                    <motion.button
-                      layout
-                      key={pred.name}
-                      type="button"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.22 }}
-                      onClick={() => onSelectPathology(pred.name)}
-                      className="group w-full cursor-pointer rounded-2xl border px-3.5 py-2.5 text-left transition-colors"
-                      style={{
-                        borderColor: isSelected
-                          ? "var(--accent-clinical)"
-                          : isPos
-                          ? "var(--accent-alert-dim)"
-                          : "transparent",
-                        backgroundColor: isSelected
-                          ? "var(--accent-clinical-dim)"
-                          : isPos
-                          ? "var(--accent-alert-dim)"
-                          : "transparent",
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span
-                            className="h-1.5 w-1.5 shrink-0 rounded-full"
-                            style={{
-                              backgroundColor: isPos
-                                ? "var(--accent-alert)"
-                                : isSelected
-                                ? "var(--accent-clinical)"
-                                : "var(--border-strong)",
-                            }}
-                          />
-                          <span className="truncate text-sm font-medium">
-                            {formatPathology(pred.name)}
-                          </span>
-                          {isPos && note?.guideline && (
-                            <span
-                              className="hidden rounded-full border px-2 py-0.5 font-mono-tech text-[9px] sm:inline"
-                              style={{
-                                borderColor: "var(--border-subtle)",
-                                color: "var(--text-secondary)",
-                              }}
-                            >
-                              {note.guideline}
-                            </span>
-                          )}
-                        </div>
+                return (
+                  <button
+                    key={pred.name}
+                    type="button"
+                    onClick={() => onSelectPathology(pred.name)}
+                    className="group w-full cursor-pointer rounded-2xl border px-3.5 py-2.5 text-left transition-all hover:border-teal-500/35"
+                    style={{
+                      borderColor: isSelected
+                        ? "var(--accent-clinical)"
+                        : isPos
+                        ? "var(--accent-alert-dim)"
+                        : "transparent",
+                      backgroundColor: isSelected
+                        ? "var(--accent-clinical-dim)"
+                        : isPos
+                        ? "var(--accent-alert-dim)"
+                        : "transparent",
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
                         <span
-                          className="font-mono-tech text-xs font-semibold"
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
                           style={{
-                            color: isPos
-                              ? "var(--accent-alert)"
-                              : isSelected
-                              ? "var(--accent-clinical)"
-                              : "var(--text-secondary)",
-                          }}
-                        >
-                          {(pred.score * 100).toFixed(1)}%
-                        </span>
-                      </div>
-
-                      <div
-                        className="relative mt-2 h-1 w-full rounded-full"
-                        style={{ backgroundColor: "var(--border-subtle)" }}
-                      >
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: `${Math.min(100, Math.max(2, pred.score * 100))}%`,
                             backgroundColor: isPos
                               ? "var(--accent-alert)"
                               : isSelected
                               ? "var(--accent-clinical)"
-                              : "var(--accent-titanium)",
+                              : "var(--border-strong)",
                           }}
                         />
-                        <div
-                          className="absolute top-1/2 h-2.5 w-[1px] -translate-y-1/2"
-                          style={{
-                            left: `${threshold * 100}%`,
-                            backgroundColor: "var(--text-muted)",
-                          }}
-                        />
+                        <span className="truncate text-[13.5px] font-medium">
+                          {formatPathology(pred.name)}
+                        </span>
                       </div>
+                      <span
+                        className="font-mono-tech text-xs font-semibold"
+                        style={{
+                          color: isPos
+                            ? "var(--accent-alert)"
+                            : isSelected
+                            ? "var(--accent-clinical)"
+                            : "var(--text-secondary)",
+                        }}
+                      >
+                        {(pred.score * 100).toFixed(1)}%
+                      </span>
+                    </div>
 
-                      {(isSelected || isPos) && note && (
-                        <div
-                          className="mt-1.5 flex items-center justify-between text-[11px]"
-                          style={{ color: "var(--text-secondary)" }}
-                        >
-                          <span className="truncate">{note.plain}</span>
-                          {pred.anatomical_zone && (
-                            <span
-                              className="ml-2 shrink-0 font-mono-tech text-[9.5px]"
-                              style={{ color: "var(--accent-clinical)" }}
-                            >
-                              {pred.anatomical_zone}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </motion.button>
-                  );
-                })}
-              </AnimatePresence>
+                    <div
+                      className="relative mt-2 h-1 w-full rounded-full"
+                      style={{ backgroundColor: "var(--border-subtle)" }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, Math.max(2, pred.score * 100))}%`,
+                          backgroundColor: isPos
+                            ? "var(--accent-alert)"
+                            : isSelected
+                            ? "var(--accent-clinical)"
+                            : "var(--accent-titanium)",
+                        }}
+                      />
+                    </div>
+
+                    {isSelected && note && (
+                      <div
+                        className="mt-1.5 flex items-center justify-between text-[11px]"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        <span className="truncate">{note.plain}</span>
+                        {pred.anatomical_zone && (
+                          <span
+                            className="ml-2 shrink-0 font-mono-tech text-[10px]"
+                            style={{ color: "var(--accent-clinical)" }}
+                          >
+                            {pred.anatomical_zone}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
-            {predictions.length > 6 && (
+            {predictions.length > 5 && (
               <button
                 type="button"
                 onClick={() => setShowAllPathologies((v) => !v)}
-                className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border py-2 font-mono-tech text-[10px] tracking-[0.14em] uppercase transition-colors"
+                className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-medium transition-colors hover:border-teal-500/35"
                 style={{
                   borderColor: "var(--border-subtle)",
                   color: "var(--text-secondary)",
@@ -1322,53 +1276,39 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
               >
                 {showAllPathologies ? (
                   <>
-                    <span>Show Top 6 Only</span>
+                    <span>Show Top 5 Only</span>
                     <ChevronUp className="h-3.5 w-3.5" />
                   </>
                 ) : (
                   <>
-                    <span>Show All {predictions.length} Pathologies</span>
+                    <span>Show All {predictions.length} Conditions</span>
                     <ChevronDown className="h-3.5 w-3.5" />
                   </>
                 )}
               </button>
             )}
 
-            {/* Quiet Patient Profile Footer */}
+            {/* Quiet Patient Context Bar */}
             <div
-              className="flex items-center justify-between gap-3 border-t pt-4"
+              className="flex items-center justify-between gap-3 border-t pt-3.5"
               style={{ borderColor: "var(--border-subtle)" }}
             >
               <div className="flex min-w-0 items-center gap-2.5">
-                <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border"
-                  style={{
-                    borderColor: "var(--border-subtle)",
-                    backgroundColor: "var(--bg-secondary)",
-                  }}
-                >
-                  <UserRound className="h-3.5 w-3.5" style={{ color: "var(--accent-clinical)" }} />
-                </div>
+                <UserRound className="h-4 w-4 shrink-0" style={{ color: "var(--accent-clinical)" }} />
                 <div className="min-w-0">
-                  <div className="truncate text-xs font-semibold">
+                  <div className="truncate text-xs font-medium">
                     {patient.age ? `${patient.age}y ` : ""}
                     {patient.sex} · {patient.setting}
-                  </div>
-                  <div className="truncate text-[11px]" style={{ color: "var(--text-muted)" }}>
-                    {patient.indication || "No clinical history specified"}
                   </div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={onOpenPatientDrawer}
-                className="shrink-0 cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
-                style={{
-                  borderColor: "var(--border-strong)",
-                  color: "var(--text-primary)",
-                }}
+                className="shrink-0 cursor-pointer text-xs font-medium transition-colors hover:underline"
+                style={{ color: "var(--accent-clinical)" }}
               >
-                Edit Profile
+                Edit Context
               </button>
             </div>
           </SpotlightCard>

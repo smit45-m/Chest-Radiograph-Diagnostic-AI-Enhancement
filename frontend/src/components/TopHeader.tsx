@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { Command, HeartPulse, Moon, Sparkles, Sun, Upload } from "lucide-react";
+import { HeartPulse, Moon, Search, Sparkles, Sun, Upload } from "lucide-react";
 import { NAV_PAGES, formatPathology, type PageId } from "../data/clinicalCatalog";
 import type { AIConfigStatus, HealthStatus, PredictionResponse, ThemeMode } from "../types/clinical";
 
@@ -48,7 +48,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   return (
     <header
       role="banner"
-      className="no-print sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b px-5 transition-colors md:px-8"
+      className="no-print sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b px-5 transition-colors md:px-8"
       style={{
         backgroundColor: "var(--bg-glass)",
         borderColor: "var(--border-subtle)",
@@ -56,65 +56,60 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         WebkitBackdropFilter: "blur(22px) saturate(165%)",
       }}
     >
-      {/* Left: Page Breadcrumb + Mobile Brand */}
+      {/* Subtle Top Indeterminate Progress Bar while Analyzing */}
+      {isAnalyzing && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute right-0 bottom-0 left-0 h-[2px] overflow-hidden"
+        >
+          <div
+            className="top-progress-bar h-full w-1/3 rounded-full"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent, var(--accent-clinical), transparent)",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Left: Clean Page Title */}
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
           onClick={() => onSelectPage("overview")}
-          className="font-display text-sm font-bold tracking-[0.06em] lg:hidden"
+          className="font-display text-sm font-bold tracking-[0.02em] lg:hidden"
         >
-          CXR·DIAGNOSTIC
+          CXR·Diagnostic
         </button>
 
-        <div className="hidden items-center gap-2.5 lg:flex">
-          <span
-            className="font-mono-tech text-[11px] font-medium"
-            style={{ color: "var(--accent-clinical)" }}
-          >
-            {pageMeta.num}
-          </span>
-          <span style={{ color: "var(--border-strong)" }}>/</span>
+        <div className="hidden items-center gap-2 lg:flex">
           <span className="font-display text-sm font-semibold">{pageMeta.label}</span>
-          <span
-            className="hidden rounded-full border px-2.5 py-0.5 font-mono-tech text-[10px] xl:inline"
-            style={{
-              borderColor: "var(--border-subtle)",
-              color: "var(--text-muted)",
-            }}
-          >
-            {pageMeta.shortDesc}
-          </span>
-        </div>
-
-        {isAnalyzing && (
-          <div
-            className="flex items-center gap-2 rounded-full border px-3 py-1 font-mono-tech text-[10px]"
-            style={{
-              borderColor: "var(--accent-clinical)",
-              backgroundColor: "var(--accent-clinical-dim)",
-              color: "var(--accent-clinical)",
-            }}
-          >
+          {isAnalyzing && (
             <span
-              className="h-1.5 w-1.5 rounded-full clinical-led"
-              style={{ backgroundColor: "var(--accent-clinical)" }}
-            />
-            <span>Inferring on RTX CUDA...</span>
-          </div>
-        )}
+              className="ml-1 flex items-center gap-1.5 font-mono-tech text-[11px]"
+              style={{ color: "var(--accent-clinical)" }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full clinical-led"
+                style={{ backgroundColor: "var(--accent-clinical)" }}
+              />
+              Analyzing...
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Center: Persistent Active Specimen Telemetry Pill (Visible across all 5 pages!) */}
+      {/* Center: Clean Active Study Status Pill */}
       {predictionData && !isAnalyzing && (
         <button
           type="button"
           onClick={() => onSelectPage("studio")}
-          title="Jump to active radiograph in Scan Studio"
-          className={`hidden cursor-pointer items-center gap-3 rounded-full border py-1 pr-3.5 pl-1.5 transition-all hover:opacity-95 ${
-            sidebarCollapsed ? "md:flex" : "xl:flex"
+          title="Open active X-ray in Scan Studio"
+          className={`hidden cursor-pointer items-center gap-2.5 rounded-full border py-1 pr-3.5 pl-1.5 transition-all hover:border-teal-500/40 ${
+            sidebarCollapsed ? "md:flex" : "lg:flex"
           }`}
           style={{
-            borderColor: "var(--border-strong)",
+            borderColor: "var(--border-subtle)",
             backgroundColor: "var(--bg-elevated)",
           }}
         >
@@ -122,11 +117,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <img
               src={imageUrl}
               alt="Active study thumbnail"
-              className="h-7 w-7 rounded-full border border-white/10 bg-black object-cover"
+              className="h-6 w-6 rounded-full border border-white/10 bg-black object-cover"
             />
           )}
-          <div className="flex items-center gap-2.5 text-xs">
-            <span className="max-w-[140px] truncate font-medium">{activeStudyName}</span>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="max-w-[130px] truncate font-medium">{activeStudyName}</span>
             <span style={{ color: "var(--border-strong)" }}>·</span>
             <span
               className="font-mono-tech text-[11px] font-semibold"
@@ -134,21 +129,23 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             >
               {topPos
                 ? formatPathology(topPos.name).toLowerCase() === activeStudyName.toLowerCase()
-                  ? `${(topPos.score * 100).toFixed(1)}%`
-                  : `${formatPathology(topPos.name)} ${(topPos.score * 100).toFixed(1)}%`
+                  ? `${(topPos.score * 100).toFixed(0)}%`
+                  : `${formatPathology(topPos.name)} ${(topPos.score * 100).toFixed(0)}%`
                 : lead
-                ? `Clear (${(lead.score * 100).toFixed(0)}%)`
+                ? "Clear"
                 : "Ready"}
             </span>
             {ctr != null && (
               <>
-                <span style={{ color: "var(--border-strong)" }}>·</span>
+                <span className="hidden sm:inline" style={{ color: "var(--border-strong)" }}>
+                  ·
+                </span>
                 <span
-                  className="flex items-center gap-1 font-mono-tech text-[10.5px]"
+                  className="hidden items-center gap-1 font-mono-tech text-[10.5px] sm:flex"
                   style={{ color: "var(--text-secondary)" }}
                 >
                   <HeartPulse className="h-3 w-3" style={{ color: "var(--accent-clinical)" }} />
-                  CTR {ctr.toFixed(3)}
+                  {ctr.toFixed(2)}
                 </span>
               </>
             )}
@@ -156,43 +153,58 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         </button>
       )}
 
-      {/* Right: Instrument Controls */}
+      {/* Right: 3 Clean Utility Actions (No Clutter) */}
       <div className="flex shrink-0 items-center gap-2">
+        {/* Mobile-only Gemini button since sidebar is hidden on mobile */}
         <button
           type="button"
           onClick={onOpenGemini}
-          className="flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono-tech text-[10px] tracking-[0.1em] uppercase whitespace-nowrap transition-opacity hover:opacity-90"
+          aria-label="Configure Gemini AI"
+          title="AI Engine Settings"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border lg:hidden"
           style={{
             borderColor: geminiReady ? "var(--accent-clinical)" : "var(--border-subtle)",
-            backgroundColor: geminiReady ? "var(--accent-clinical-dim)" : "var(--bg-elevated)",
-            color: "var(--text-primary)",
+            backgroundColor: "var(--bg-elevated)",
+            color: geminiReady ? "var(--accent-clinical)" : "var(--text-muted)",
           }}
-          title="Configure Gemini Decision 1 & Interactions API"
         >
-          <Sparkles
-            className="h-3 w-3"
-            style={{ color: geminiReady ? "var(--accent-clinical)" : "var(--text-muted)" }}
-          />
-          <span className="hidden sm:inline">{geminiReady ? "Gemini Live" : "Gemini AI"}</span>
+          <Sparkles className="h-3.5 w-3.5" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenCommand}
+          aria-label="Search commands"
+          title="Quick Search (Ctrl+K)"
+          className="hidden h-8 cursor-pointer items-center gap-2 rounded-full border px-3 text-xs transition-colors hover:border-teal-500/40 sm:flex"
+          style={{
+            borderColor: "var(--border-subtle)",
+            backgroundColor: "var(--bg-elevated)",
+            color: "var(--text-muted)",
+          }}
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span className="hidden md:inline">Search</span>
+          <kbd className="font-mono-tech text-[10px] opacity-75">⌘K</kbd>
         </button>
 
         <button
           type="button"
           onClick={onToggleTheme}
-          aria-label={`Switch to ${theme === "dark" ? "Clinical Alabaster light" : "Radiology Darkroom dark"} theme`}
-          title={theme === "dark" ? "Switch to Clinical Alabaster Light" : "Switch to Radiology Darkroom"}
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border transition-colors hover:opacity-85"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+          title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border transition-colors hover:border-teal-500/40"
           style={{
             borderColor: "var(--border-subtle)",
             backgroundColor: "var(--bg-elevated)",
-            color: "var(--text-primary)",
+            color: "var(--text-secondary)",
           }}
         >
           <motion.span
             key={theme}
-            initial={{ rotate: -45, opacity: 0, scale: 0.7 }}
+            initial={{ rotate: -35, opacity: 0, scale: 0.75 }}
             animate={{ rotate: 0, opacity: 1, scale: 1 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.22 }}
             className="flex items-center justify-center"
           >
             {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
@@ -201,32 +213,16 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
         <button
           type="button"
-          onClick={onOpenCommand}
-          aria-label="Open Command Palette"
-          title="Command Palette (Ctrl+K)"
-          className="hidden h-8 cursor-pointer items-center gap-1 rounded-full border px-2.5 font-mono-tech text-[10px] transition-opacity hover:opacity-85 sm:flex"
-          style={{
-            borderColor: "var(--border-subtle)",
-            backgroundColor: "var(--bg-elevated)",
-            color: "var(--text-secondary)",
-          }}
-        >
-          <Command className="h-3 w-3" />
-          <span>K</span>
-        </button>
-
-        <button
-          type="button"
           onClick={onUploadClick}
-          className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold whitespace-nowrap transition-transform active:scale-95"
+          className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold whitespace-nowrap transition-all hover:brightness-110 active:scale-[0.97]"
           style={{
             backgroundColor: "var(--accent-clinical)",
             color: "#ffffff",
-            boxShadow: "0 4px 18px -4px var(--accent-clinical-glow)",
+            boxShadow: "0 4px 16px -4px var(--accent-clinical-glow)",
           }}
         >
           <Upload className="h-3.5 w-3.5" />
-          <span>Upload Scan</span>
+          <span>Upload X-Ray</span>
         </button>
       </div>
     </header>

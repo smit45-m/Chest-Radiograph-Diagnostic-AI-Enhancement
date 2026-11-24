@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle2, Upload } from "lucide-react";
 import { AmbientRadiologyField } from "./components/AmbientRadiologyField";
 import { BatchAndSpecsSection } from "./components/BatchAndSpecsSection";
 import { ClinicalReportSection } from "./components/ClinicalReportSection";
@@ -119,12 +120,14 @@ export default function App() {
   const [batchResult, setBatchResult] = useState<BatchPredictionResponse | null>(null);
   const [batchLoading, setBatchLoading] = useState(false);
 
-  // Modals / Drawers / Toast
+  // Modals / Drawers / Toast / Global Drag-and-Drop
   const [patientDrawerOpen, setPatientDrawerOpen] = useState(false);
   const [geminiModalOpen, setGeminiModalOpen] = useState(false);
   const [geminiSaving, setGeminiSaving] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [globalDragOver, setGlobalDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -196,7 +199,7 @@ export default function App() {
     if (window.location.hash !== `#${page}`) {
       window.history.pushState(null, "", `#${page}`);
     }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
   }, []);
 
   useEffect(() => {
@@ -863,9 +866,62 @@ export default function App() {
   );
 
   return (
-    <div className="relative min-h-screen">
+    <div
+      className="relative min-h-screen"
+      onDragEnter={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          dragDepthRef.current += 1;
+          setGlobalDragOver(true);
+        }
+      }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+        }
+      }}
+      onDragLeave={() => {
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+        if (dragDepthRef.current === 0) setGlobalDragOver(false);
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer.files?.length) {
+          e.preventDefault();
+          dragDepthRef.current = 0;
+          setGlobalDragOver(false);
+          handleFileUpload(e.dataTransfer.files[0]);
+        }
+      }}
+    >
       <AmbientRadiologyField theme={theme} />
       <div className="film-grain no-print" aria-hidden="true" />
+
+      <AnimatePresence>
+        {globalDragOver && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.16 }}
+            className="no-print pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-md"
+          >
+            <div
+              className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed px-12 py-10 text-center"
+              style={{
+                borderColor: "var(--accent-clinical)",
+                backgroundColor: "var(--bg-elevated)",
+              }}
+            >
+              <Upload className="h-9 w-9" style={{ color: "var(--accent-clinical)" }} />
+              <div className="font-display text-xl font-semibold">
+                Drop Chest X-Ray or DICOM anywhere
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                Release to run instant multi-model analysis &amp; Grad-CAM++ localization
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <input
         ref={fileInputRef}
@@ -899,7 +955,7 @@ export default function App() {
 
       <div
         className={`no-print relative z-10 flex min-h-screen flex-col transition-[padding-left] duration-300 ease-out ${
-          sidebarCollapsed ? "lg:pl-[76px]" : "lg:pl-[244px]"
+          sidebarCollapsed ? "lg:pl-[72px]" : "lg:pl-[228px]"
         }`}
       >
         <TopHeader
@@ -920,14 +976,14 @@ export default function App() {
           onUploadClick={() => fileInputRef.current?.click()}
         />
 
-        <main className="flex-1">
+        <main className="flex-1 min-w-0 overflow-x-clip">
           <AnimatePresence mode="wait">
             <motion.div
               key={activePage}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             >
               {activePage === "overview" && (
                 <HeroOverview
@@ -1115,17 +1171,19 @@ export default function App() {
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
-            className="no-print fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full border px-5 py-2.5 font-mono-tech text-xs shadow-2xl backdrop-blur-xl"
+            initial={{ opacity: 0, y: 14, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="no-print fixed right-6 bottom-6 z-50 flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-medium shadow-xl backdrop-blur-xl"
             style={{
-              backgroundColor: "var(--bg-glass)",
-              borderColor: "var(--accent-clinical)",
+              backgroundColor: "var(--bg-elevated)",
+              borderColor: "var(--border-strong)",
               color: "var(--text-primary)",
             }}
           >
-            {toast}
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--accent-clinical)" }} />
+            <span>{toast}</span>
           </motion.div>
         )}
       </AnimatePresence>

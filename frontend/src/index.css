@@ -4,95 +4,96 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  /* Bespoke Radiology Darkroom Surfaces (Deep Film Carbon + Milled Graphite) */
-  --bg-primary: #06090c;
-  --bg-secondary: #0b1015;
-  --bg-elevated: #0f151c;
-  --bg-card: #0d1319;
-  --bg-glass: rgba(8, 12, 16, 0.78);
+  /* Calm Radiology Darkroom Palette — Soft Depth, Crisp Contrast */
+  --bg-primary: #070b0f;
+  --bg-secondary: #0c1218;
+  --bg-elevated: #10171f;
+  --bg-card: #0e141b;
+  --bg-glass: rgba(9, 13, 18, 0.82);
   --bg-film: #020406;
 
-  --text-primary: #f1f5f8;
-  --text-secondary: #94a3b2;
-  --text-muted: #5d6d7e;
+  --text-primary: #f2f6fa;
+  --text-secondary: #98a8b8;
+  --text-muted: #647587;
 
-  --border-subtle: rgba(196, 222, 240, 0.085);
-  --border-strong: rgba(196, 222, 240, 0.175);
-  --border-specular: rgba(255, 255, 255, 0.09);
+  --border-subtle: rgba(196, 222, 240, 0.068);
+  --border-strong: rgba(196, 222, 240, 0.145);
+  --border-specular: rgba(255, 255, 255, 0.065);
 
   /* Disciplined Clinical Accent System */
   --accent-clinical: #14b8a6;
-  --accent-clinical-dim: rgba(20, 184, 166, 0.13);
-  --accent-clinical-glow: rgba(20, 184, 166, 0.38);
+  --accent-clinical-dim: rgba(20, 184, 166, 0.11);
+  --accent-clinical-glow: rgba(20, 184, 166, 0.3);
 
   --accent-optical: #38bdf8;
-  --accent-optical-dim: rgba(56, 189, 248, 0.12);
+  --accent-optical-dim: rgba(56, 189, 248, 0.1);
 
   --accent-alert: #f43f5e;
-  --accent-alert-dim: rgba(244, 63, 94, 0.14);
-  --accent-alert-glow: rgba(244, 63, 94, 0.36);
+  --accent-alert-dim: rgba(244, 63, 94, 0.12);
+  --accent-alert-glow: rgba(244, 63, 94, 0.3);
 
   --accent-amber: #f59e0b;
-  --accent-amber-dim: rgba(245, 158, 11, 0.13);
+  --accent-amber-dim: rgba(245, 158, 11, 0.12);
 
   --accent-titanium: #8fa5b8;
-  --accent-titanium-dim: rgba(143, 165, 184, 0.12);
+  --accent-titanium-dim: rgba(143, 165, 184, 0.1);
 
-  --surface-grid: rgba(186, 218, 238, 0.032);
-  --spotlight-color: rgba(20, 184, 166, 0.095);
+  --surface-grid: rgba(186, 218, 238, 0.022);
+  --spotlight-color: rgba(20, 184, 166, 0.065);
   --shadow-card:
-    inset 0 1px 0 0 rgba(214, 236, 252, 0.07),
-    0 24px 64px -26px rgba(0, 0, 0, 0.85);
-  --shadow-float: 0 36px 96px -24px rgba(0, 0, 0, 0.92);
+    inset 0 1px 0 0 rgba(214, 236, 252, 0.055),
+    0 18px 48px -24px rgba(0, 0, 0, 0.72);
+  --shadow-float: 0 28px 72px -20px rgba(0, 0, 0, 0.85);
 }
 
 [data-theme="light"] {
   color-scheme: light;
 
   /* Surgical Daylight Alabaster + Crisp Clinical Porcelain */
-  --bg-primary: #f3f6f8;
-  --bg-secondary: #e9eff3;
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #edf2f6;
   --bg-elevated: #ffffff;
-  --bg-card: #fafcfd;
-  --bg-glass: rgba(243, 246, 248, 0.86);
+  --bg-card: #fcfdfe;
+  --bg-glass: rgba(245, 247, 250, 0.88);
   --bg-film: #05080b;
 
-  --text-primary: #0c161f;
-  --text-secondary: #4a5b6b;
-  --text-muted: #7b8c9c;
+  --text-primary: #0f1923;
+  --text-secondary: #4e6072;
+  --text-muted: #7f91a3;
 
-  --border-subtle: rgba(12, 22, 31, 0.085);
-  --border-strong: rgba(12, 22, 31, 0.17);
-  --border-specular: rgba(255, 255, 255, 0.95);
+  --border-subtle: rgba(15, 25, 35, 0.07);
+  --border-strong: rgba(15, 25, 35, 0.14);
+  --border-specular: rgba(255, 255, 255, 0.96);
 
   --accent-clinical: #0d9488;
-  --accent-clinical-dim: rgba(13, 148, 136, 0.1);
-  --accent-clinical-glow: rgba(13, 148, 136, 0.24);
+  --accent-clinical-dim: rgba(13, 148, 136, 0.09);
+  --accent-clinical-glow: rgba(13, 148, 136, 0.22);
 
   --accent-optical: #0284c7;
-  --accent-optical-dim: rgba(2, 132, 199, 0.1);
+  --accent-optical-dim: rgba(2, 132, 199, 0.09);
 
   --accent-alert: #e11d48;
-  --accent-alert-dim: rgba(225, 29, 72, 0.1);
-  --accent-alert-glow: rgba(225, 29, 72, 0.24);
+  --accent-alert-dim: rgba(225, 29, 72, 0.09);
+  --accent-alert-glow: rgba(225, 29, 72, 0.2);
 
   --accent-amber: #d97706;
-  --accent-amber-dim: rgba(217, 119, 6, 0.1);
+  --accent-amber-dim: rgba(217, 119, 6, 0.09);
 
   --accent-titanium: #5b7083;
-  --accent-titanium-dim: rgba(91, 112, 131, 0.1);
+  --accent-titanium-dim: rgba(91, 112, 131, 0.09);
 
-  --surface-grid: rgba(12, 22, 31, 0.036);
-  --spotlight-color: rgba(13, 148, 136, 0.075);
+  --surface-grid: rgba(15, 25, 35, 0.025);
+  --spotlight-color: rgba(13, 148, 136, 0.055);
   --shadow-card:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.96),
-    0 22px 54px -26px rgba(12, 28, 44, 0.13);
-  --shadow-float: 0 30px 84px -24px rgba(12, 28, 44, 0.17);
+    0 14px 36px -20px rgba(15, 30, 48, 0.1);
+  --shadow-float: 0 24px 64px -20px rgba(15, 30, 48, 0.14);
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
+    overflow-x: clip;
     background-color: var(--bg-primary);
     color: var(--text-primary);
     font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
@@ -105,10 +106,18 @@
     margin: 0;
     background-color: var(--bg-primary);
     color: var(--text-primary);
-    overflow-x: hidden;
+    overflow-x: clip;
     transition:
-      background-color 0.5s cubic-bezier(0.16, 1, 0.3, 1),
-      color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      background-color 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+      color 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   ::selection {
@@ -120,14 +129,14 @@
 /* Bespoke Swiss-Clinical Typography */
 .font-display {
   font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
-  letter-spacing: -0.032em;
+  letter-spacing: -0.028em;
 }
 
 .font-serif-editorial {
   font-family: "Newsreader", Georgia, serif;
   font-weight: 400;
   font-style: italic;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.012em;
 }
 
 .font-mono-tech {
@@ -135,17 +144,17 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Precision Architectural Instrument Surfaces with Specular Edge & Pointer Sheen */
+/* Calm Elevated Clinical Surfaces */
 .atelier-card {
   position: relative;
   background-color: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-card);
   transition:
-    border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    border-color 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .atelier-card-strong {
@@ -154,12 +163,12 @@
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-card);
   transition:
-    border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    border-color 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Cursor-tracked subtle radial sheen inside SpotlightCard */
+/* Subtle Pointer-Tracked Radial Sheen */
 .spotlight-surface {
   position: relative;
   overflow: hidden;
@@ -171,9 +180,9 @@
   inset: 0;
   pointer-events: none;
   opacity: var(--spot-opacity, 0);
-  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1);
   background: radial-gradient(
-    420px circle at var(--mx, 50%) var(--my, 50%),
+    380px circle at var(--mx, 50%) var(--my, 50%),
     var(--spotlight-color),
     transparent 70%
   );
@@ -191,8 +200,22 @@
   inset: 0;
   pointer-events: none;
   z-index: 55;
-  opacity: 0.018;
+  opacity: 0.012;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Smooth Top Indeterminate Progress Bar */
+@keyframes top-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+.top-progress-bar {
+  animation: top-shimmer 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 /* Calibrated Range Slider */
@@ -212,56 +235,58 @@ input[type="range"].clinical-slider::-webkit-slider-thumb {
   height: 14px;
   border-radius: 50%;
   background: var(--accent-clinical);
-  border: 2px solid var(--bg-primary);
-  box-shadow: 0 0 0 1px var(--accent-clinical), 0 0 12px var(--accent-clinical-glow);
+  border: 2px solid var(--bg-elevated);
+  box-shadow: 0 0 0 1px var(--accent-clinical), 0 2px 8px var(--accent-clinical-glow);
   cursor: pointer;
-  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 input[type="range"].clinical-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.18);
+  transform: scale(1.16);
 }
 
-/* Breathing Ambient Pulmonary Auras (12 breaths/min calm physiological rhythm) */
+/* Gentle Breathing Pulmonary Auras */
 @keyframes pulmonary-breathe-a {
   0%, 100% {
     transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.45;
+    opacity: 0.38;
   }
   50% {
-    transform: translate3d(28px, -18px, 0) scale(1.09);
-    opacity: 0.72;
+    transform: translate3d(22px, -14px, 0) scale(1.06);
+    opacity: 0.6;
   }
 }
 
 @keyframes pulmonary-breathe-b {
   0%, 100% {
-    transform: translate3d(0, 0, 0) scale(1.05);
-    opacity: 0.36;
+    transform: translate3d(0, 0, 0) scale(1.03);
+    opacity: 0.3;
   }
   50% {
-    transform: translate3d(-24px, 22px, 0) scale(0.95);
-    opacity: 0.62;
+    transform: translate3d(-18px, 18px, 0) scale(0.96);
+    opacity: 0.52;
   }
 }
 
 .aura-breathe-a {
-  animation: pulmonary-breathe-a 11s ease-in-out infinite;
+  animation: pulmonary-breathe-a 12s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .aura-breathe-b {
-  animation: pulmonary-breathe-b 14s ease-in-out infinite;
+  animation: pulmonary-breathe-b 15s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
-/* Live ECG / Telemetry Status LED */
+/* Live Status LED */
 @keyframes pulse-led {
   0%, 100% {
     opacity: 0.6;
-    transform: scale(0.92);
+    transform: scale(0.94);
   }
   50% {
     opacity: 1;
-    transform: scale(1.18);
+    transform: scale(1.14);
   }
 }
 
@@ -272,16 +297,16 @@ input[type="range"].clinical-slider::-webkit-slider-thumb:hover {
 @keyframes ripple-ring {
   0% {
     transform: scale(0.8);
-    opacity: 0.75;
+    opacity: 0.7;
   }
   100% {
-    transform: scale(2.4);
+    transform: scale(2.2);
     opacity: 0;
   }
 }
 
 .clinical-ripple {
-  animation: ripple-ring 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  animation: ripple-ring 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
 /* Optical Laser Sweep During Inference */
@@ -291,10 +316,10 @@ input[type="range"].clinical-slider::-webkit-slider-thumb:hover {
     opacity: 0;
   }
   18% {
-    opacity: 0.9;
+    opacity: 0.85;
   }
   82% {
-    opacity: 0.9;
+    opacity: 0.85;
   }
   100% {
     transform: translateY(520%);
@@ -303,20 +328,20 @@ input[type="range"].clinical-slider::-webkit-slider-thumb:hover {
 }
 
 .scan-beam {
-  animation: scan-beam 1.65s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: scan-beam 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-/* Subtle idle optical shimmer along specimen frame */
+/* Subtle idle shimmer along specimen frame */
 @keyframes idle-scanline {
   0% {
     transform: translateY(-10%);
     opacity: 0;
   }
   15% {
-    opacity: 0.38;
+    opacity: 0.28;
   }
   85% {
-    opacity: 0.38;
+    opacity: 0.28;
   }
   100% {
     transform: translateY(110%);
@@ -325,7 +350,16 @@ input[type="range"].clinical-slider::-webkit-slider-thumb:hover {
 }
 
 .idle-scanline {
-  animation: idle-scanline 6.5s linear infinite;
+  animation: idle-scanline 7.5s linear infinite;
+}
+
+/* Hide horizontal scrollbar on sleek pill strips while keeping swipe smooth */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Refined Scrollbar */
@@ -335,7 +369,7 @@ input[type="range"].clinical-slider::-webkit-slider-thumb:hover {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-primary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -377,7 +411,8 @@ input[type="range"].clinical-slider::-webkit-slider-thumb:hover {
   .clinical-led,
   .clinical-ripple,
   .scan-beam,
-  .idle-scanline {
+  .idle-scanline,
+  .top-progress-bar {
     animation: none !important;
   }
 }

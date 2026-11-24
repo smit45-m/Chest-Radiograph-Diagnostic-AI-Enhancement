@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Database,
   FileJson,
@@ -13,11 +15,11 @@ import {
   Save,
   Send,
   ShieldCheck,
-  Sparkles,
   Square,
   Stethoscope,
   Volume2,
 } from "lucide-react";
+import { formatTriageLabel } from "../data/clinicalCatalog";
 import type { CopilotMessage, PredictionResponse, ReportData } from "../types/clinical";
 import { SpotlightCard } from "./SpotlightCard";
 
@@ -55,10 +57,17 @@ const COPILOT_SUGGESTIONS = [
   "Draft a clear patient-friendly explanation.",
 ];
 
-function renderInlineBold(text: string): React.ReactNode {
+const QUICK_FOLLOWUPS = [
+  { label: "Explain CTR risk", q: "Explain the CTR biometry and cardiac risk." },
+  { label: "Next steps?", q: "What follow-up imaging or labs are recommended?" },
+  { label: "Patient summary", q: "Draft a clear patient-friendly explanation." },
+];
+
+/** Parses **bold**, *italic*, and `inline code` cleanly with zero raw markdown artifacts */
+function renderInlineRichText(text: string): React.ReactNode {
   const cleaned = text.replace(/\$([^$]+)\$/g, "$1");
-  const parts = cleaned.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, idx) => {
+  const tokens = cleaned.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+  return tokens.map((part, idx) => {
     if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
       return (
         <strong key={idx} className="font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -66,12 +75,38 @@ function renderInlineBold(text: string): React.ReactNode {
         </strong>
       );
     }
+    if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+      return (
+        <em key={idx} className="italic" style={{ color: "var(--text-primary)" }}>
+          {part.slice(1, -1)}
+        </em>
+      );
+    }
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
+      return (
+        <code
+          key={idx}
+          className="rounded px-1.5 py-0.5 font-mono-tech text-[11.5px]"
+          style={{
+            backgroundColor: "var(--bg-elevated)",
+            color: "var(--accent-clinical)",
+          }}
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
     return <React.Fragment key={idx}>{part}</React.Fragment>;
   });
 }
 
 function renderClinicalMarkdown(text: string): React.ReactNode {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  const lines = text
+    .split(/\r?\n/)
+    .filter((l) => l.trim().length > 0)
+    // Filter out noisy fallback setup tips so clinicians see clean medical guidance only
+    .filter((l) => !/Add a .*GEMINI_API_KEY.*in AI Engine Settings/i.test(l));
+
   return (
     <div className="space-y-2">
       {lines.map((raw, idx) => {
@@ -80,7 +115,7 @@ function renderClinicalMarkdown(text: string): React.ReactNode {
           return (
             <div
               key={idx}
-              className="pt-1 font-mono-tech text-[10.5px] font-semibold tracking-[0.14em] uppercase"
+              className="pt-1 text-xs font-semibold tracking-wide"
               style={{ color: "var(--accent-clinical)" }}
             >
               {trimmed.replace(/^#{1,4}\s+/, "")}
@@ -95,7 +130,7 @@ function renderClinicalMarkdown(text: string): React.ReactNode {
                 style={{ backgroundColor: "var(--accent-clinical)" }}
               />
               <span style={{ color: "var(--text-secondary)" }}>
-                {renderInlineBold(trimmed.replace(/^[-*•]\s+/, ""))}
+                {renderInlineRichText(trimmed.replace(/^[-*•]\s+/, ""))}
               </span>
             </div>
           );
@@ -106,7 +141,7 @@ function renderClinicalMarkdown(text: string): React.ReactNode {
             className="text-[13px] leading-relaxed"
             style={{ color: "var(--text-secondary)" }}
           >
-            {renderInlineBold(trimmed)}
+            {renderInlineRichText(trimmed)}
           </p>
         );
       })}
@@ -145,12 +180,10 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [editingTranscript, setEditingTranscript] = useState(false);
   const [transcriptDraft, setTranscriptDraft] = useState("");
+  const [showCompartments, setShowCompartments] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
-  const liveTranscript =
-    report?.dictation_transcript ||
-    report?.impression ||
-    "";
+  const liveTranscript = report?.dictation_transcript || report?.impression || "";
 
   useEffect(() => {
     setTranscriptDraft(liveTranscript);
@@ -227,46 +260,43 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
   const isCritical = Boolean(report?.critical_alert);
 
   return (
-    <div className="mx-auto max-w-[1360px] px-5 py-7 pb-24 md:px-8 md:py-9 lg:pb-12 space-y-8">
-      {/* Page Header + Single-Line Export Actions */}
-      <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
-        <div className="space-y-1.5">
-          <div
-            className="font-mono-tech text-[10px] font-medium tracking-[0.2em] uppercase"
-            style={{ color: "var(--accent-clinical)" }}
-          >
-            04 · CLINICAL MONOGRAPH &amp; RADIOLOGY COPILOT
-          </div>
-          <h1 className="font-display text-3xl font-bold sm:text-4xl">
-            Structured ACR dictation &amp;{" "}
+    <div className="mx-auto max-w-[1280px] px-5 py-6 pb-24 md:px-8 md:py-7 lg:pb-10 space-y-6">
+      {/* Compact Header + Clean Action Row */}
+      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+        <div>
+          <h1 className="font-display text-2xl font-bold sm:text-3xl">
+            Clinical Report &amp;{" "}
             <span
               className="font-serif-editorial font-normal"
               style={{ color: "var(--accent-clinical)" }}
             >
-              grounded dialogue.
+              Copilot
             </span>
           </h1>
+          <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
+            Review AI dictation, listen aloud, export PDF/FHIR, or ask follow-up questions.
+          </p>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-nowrap">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={!predictionData || reportLoading}
             onClick={onResynthesize}
-            className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-opacity hover:opacity-85 disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-colors hover:border-teal-500/40 disabled:opacity-50"
             style={{
-              borderColor: "var(--border-strong)",
+              borderColor: "var(--border-subtle)",
               backgroundColor: "var(--bg-elevated)",
             }}
           >
             <RefreshCw className={`h-3.5 w-3.5 ${reportLoading ? "animate-spin" : ""}`} />
-            <span>Re-Synthesize</span>
+            <span>Refresh</span>
           </button>
           <button
             type="button"
             disabled={!report}
             onClick={handleCopy}
-            className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-opacity hover:opacity-85 disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-colors hover:border-teal-500/40 disabled:opacity-50"
             style={{
               borderColor: "var(--border-subtle)",
               backgroundColor: "var(--bg-elevated)",
@@ -277,26 +307,26 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
             ) : (
               <Copy className="h-3.5 w-3.5" />
             )}
-            <span>{copied ? "Copied" : "Copy Text"}</span>
+            <span>{copied ? "Copied" : "Copy"}</span>
           </button>
           <button
             type="button"
             disabled={!predictionData}
             onClick={onExportFhir}
-            className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-opacity hover:opacity-85 disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-xs font-medium transition-colors hover:border-teal-500/40 disabled:opacity-50"
             style={{
               borderColor: "var(--border-subtle)",
               backgroundColor: "var(--bg-elevated)",
             }}
           >
             <FileJson className="h-3.5 w-3.5" />
-            <span>FHIR JSON</span>
+            <span>FHIR</span>
           </button>
           <button
             type="button"
             disabled={!predictionData}
             onClick={onPrintPdf}
-            className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-transform active:scale-95 disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
             style={{
               backgroundColor: "var(--accent-clinical)",
               color: "#ffffff",
@@ -308,86 +338,69 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
         </div>
       </div>
 
-      {/* Main 2-Column Layout */}
-      <div className="grid grid-cols-1 items-start gap-7 lg:grid-cols-12">
-        {/* LEFT 7 COLS: Structured ACR Clinical Monograph */}
+      {/* Main 2-Column Workspace */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+        {/* LEFT 7 COLS: Editorial ACR Document (No Nested Boxes-Inside-Boxes) */}
         <div className="lg:col-span-7">
-          <SpotlightCard strong className="rounded-[26px] p-6 sm:p-7 space-y-6">
-            {/* Accession & Provider Bar */}
+          <SpotlightCard strong className="rounded-[24px] p-5 sm:p-7 space-y-6">
+            {/* Document Meta Header */}
             <div
               className="flex flex-wrap items-center justify-between gap-3 border-b pb-4"
               style={{ borderColor: "var(--border-subtle)" }}
             >
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <FileText className="h-4 w-4" style={{ color: "var(--accent-clinical)" }} />
                   <h2 className="font-display text-base font-bold">
-                    ACR Thoracic Radiology Monograph
+                    {activeStudyName} Report
                   </h2>
                 </div>
                 <div
-                  className="flex flex-wrap items-center gap-2 font-mono-tech text-[10px] uppercase"
+                  className="flex flex-wrap items-center gap-2 text-[11px]"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  <span>
-                    STUDY: {activeStudyName} · {signedAt ? "ATTESTED FINAL" : "AI-ASSISTED DRAFT"}
-                  </span>
+                  <span>{signedAt ? "Signed Final" : "AI-Assisted Draft"}</span>
                   {activeStudyRecordId && (
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px]"
-                      style={{
-                        borderColor: "var(--accent-clinical)",
-                        color: "var(--accent-clinical)",
-                      }}
-                    >
-                      <Database className="h-2.5 w-2.5" />
-                      Synced · {activeUserName || "User DB"}
-                    </span>
+                    <>
+                      <span>·</span>
+                      <span
+                        className="inline-flex items-center gap-1"
+                        style={{ color: "var(--accent-clinical)" }}
+                      >
+                        <Database className="h-3 w-3" />
+                        Saved to {activeUserName || "Database"}
+                      </span>
+                    </>
                   )}
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {report?.source && (
-                  <span
-                    className="rounded-full border px-2.5 py-1 font-mono-tech text-[10px]"
-                    style={{
-                      borderColor: "var(--border-subtle)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    {report.source}
-                  </span>
-                )}
+              <div className="flex items-center gap-2">
                 {report?.triage_level && (
                   <span
-                    className="rounded-full border px-2.5 py-1 font-mono-tech text-[10px] font-medium uppercase"
+                    className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
                     style={{
-                      borderColor: isCritical ? "var(--accent-alert)" : "var(--accent-clinical)",
                       color: isCritical ? "var(--accent-alert)" : "var(--accent-clinical)",
                       backgroundColor: isCritical
                         ? "var(--accent-alert-dim)"
                         : "var(--accent-clinical-dim)",
                     }}
                   >
-                    {report.triage_level}
+                    {formatTriageLabel(report.triage_level)}
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Clean 4-Tab Pill Switcher */}
+            {/* Clean Segmented Tabs */}
             <div
-              className="inline-flex flex-wrap gap-1 rounded-full border p-1"
-              style={{
-                borderColor: "var(--border-subtle)",
-                backgroundColor: "var(--bg-secondary)",
-              }}
+              className="inline-flex flex-wrap gap-0.5 rounded-full p-1"
+              style={{ backgroundColor: "var(--bg-secondary)" }}
             >
               {(
                 [
                   { id: "findings", label: "Findings" },
-                  { id: "guidelines", label: "Guidelines & Rx" },
+                  { id: "guidelines", label: "Guidelines" },
                   { id: "patient", label: "Patient View" },
                   { id: "signoff", label: signedAt ? "Signed ✓" : "Sign-Off" },
                 ] as const
@@ -406,7 +419,7 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                     {active && (
                       <motion.span
                         layoutId="report-tab-pill"
-                        transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                        transition={{ type: "spring", stiffness: 420, damping: 34 }}
                         className="absolute inset-0 -z-10 rounded-full border"
                         style={{
                           backgroundColor: "var(--bg-elevated)",
@@ -420,47 +433,62 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
               })}
             </div>
 
-            {/* Smooth Cross-Fading Tab Panels */}
+            {/* Tab Body */}
             {!report ? (
-              <div className="py-16 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-                Analyze a radiograph to synthesize an ACR-compliant clinical monograph.
+              <div className="py-14 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+                Analyze a chest X-ray to generate an ACR clinical report.
               </div>
             ) : (
               <AnimatePresence mode="wait">
                 <motion.div
                   key={tab}
-                  initial={{ opacity: 0, y: 6 }}
+                  initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                 >
                   {tab === "findings" && (
                     <div className="space-y-6">
-                      {/* Real AI Attending Dictation Transcript with Audio Readout & DB Save */}
+                      {/* Refined AI Dictation Audio Banner */}
                       {liveTranscript && (
                         <div
-                          className="rounded-2xl border p-5 space-y-3"
+                          className="rounded-2xl border p-4 sm:p-5 space-y-3"
                           style={{
-                            borderColor: "var(--accent-clinical)",
-                            backgroundColor: "var(--accent-clinical-dim)",
+                            borderColor: "var(--border-strong)",
+                            backgroundColor: "var(--bg-secondary)",
                           }}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div
-                              className="flex items-center gap-2 font-mono-tech text-[10px] font-semibold tracking-[0.16em] uppercase"
+                              className="flex items-center gap-2 text-xs font-semibold"
                               style={{ color: "var(--accent-clinical)" }}
                             >
                               <Mic className="h-3.5 w-3.5" />
-                              <span>AI ATTENDING DICTATION TRANSCRIPT</span>
+                              <span>AI Dictation Transcript</span>
+                              {isSpeaking && (
+                                <span className="ml-1 flex items-end gap-0.5 h-3">
+                                  {[0, 0.14, 0.28, 0.42].map((d, i) => (
+                                    <motion.span
+                                      key={i}
+                                      className="w-0.5 rounded-full"
+                                      style={{ backgroundColor: "var(--accent-clinical)" }}
+                                      animate={{ height: ["3px", "12px", "4px"] }}
+                                      transition={{ duration: 0.7, repeat: Infinity, delay: d }}
+                                    />
+                                  ))}
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={toggleSpeakTranscript}
-                                className="flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 font-mono-tech text-[10px] font-medium transition-opacity hover:opacity-85"
+                                className="flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-colors hover:border-teal-500/50"
                                 style={{
-                                  borderColor: "var(--accent-clinical)",
+                                  borderColor: isSpeaking
+                                    ? "var(--accent-alert)"
+                                    : "var(--border-strong)",
                                   backgroundColor: "var(--bg-elevated)",
                                   color: "var(--text-primary)",
                                 }}
@@ -468,7 +496,7 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                                 {isSpeaking ? (
                                   <>
                                     <Square className="h-2.5 w-2.5" style={{ color: "var(--accent-alert)" }} />
-                                    <span>Stop Audio</span>
+                                    <span>Stop</span>
                                   </>
                                 ) : (
                                   <>
@@ -482,9 +510,9 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => setEditingTranscript(true)}
-                                  className="cursor-pointer rounded-full border px-2.5 py-1 font-mono-tech text-[10px]"
+                                  className="cursor-pointer rounded-full border px-2.5 py-1 text-[11px] transition-colors hover:border-teal-500/40"
                                   style={{
-                                    borderColor: "var(--border-strong)",
+                                    borderColor: "var(--border-subtle)",
                                     backgroundColor: "var(--bg-elevated)",
                                     color: "var(--text-secondary)",
                                   }}
@@ -498,14 +526,14 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                                     await onSaveTranscript(transcriptDraft);
                                     setEditingTranscript(false);
                                   }}
-                                  className="flex cursor-pointer items-center gap-1 rounded-full px-3 py-1 font-mono-tech text-[10px] font-semibold"
+                                  className="flex cursor-pointer items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold"
                                   style={{
                                     backgroundColor: "var(--accent-clinical)",
                                     color: "#ffffff",
                                   }}
                                 >
                                   <Save className="h-3 w-3" />
-                                  <span>Save to DB</span>
+                                  <span>Save</span>
                                 </button>
                               )}
                             </div>
@@ -534,40 +562,10 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                         </div>
                       )}
 
-                      {execSummary.length > 0 && (
-                        <div
-                          className="rounded-2xl border p-5 space-y-2.5"
-                          style={{
-                            borderColor: "var(--border-subtle)",
-                            backgroundColor: "var(--bg-secondary)",
-                          }}
-                        >
-                          <div
-                            className="font-mono-tech text-[10px] font-medium tracking-[0.18em] uppercase"
-                            style={{ color: "var(--accent-clinical)" }}
-                          >
-                            EXECUTIVE CLINICAL HANDOFF
-                          </div>
-                          <ul className="space-y-1.5 text-sm leading-relaxed">
-                            {execSummary.map((line, i) => (
-                              <li key={i} className="flex items-start gap-2.5">
-                                <span
-                                  className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full"
-                                  style={{ backgroundColor: "var(--accent-clinical)" }}
-                                />
-                                <span>{line}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      <div className="space-y-2">
-                        <div
-                          className="font-mono-tech text-[10px] tracking-[0.18em] uppercase"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          IMPRESSION
+                      {/* Clean Editorial Impression */}
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                          Impression
                         </div>
                         <p
                           className="whitespace-pre-line text-[15px] leading-relaxed font-semibold"
@@ -577,21 +575,41 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                         </p>
                       </div>
 
+                      {/* Clean Clinical Highlights (Hairline separated — no heavy nested box) */}
+                      {execSummary.length > 0 && (
+                        <div
+                          className="border-t pt-5 space-y-2"
+                          style={{ borderColor: "var(--border-subtle)" }}
+                        >
+                          <div className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                            Key Highlights
+                          </div>
+                          <ul className="space-y-1.5 text-[13.5px] leading-relaxed">
+                            {execSummary.map((line, i) => (
+                              <li key={i} className="flex items-start gap-2.5">
+                                <span
+                                  className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: "var(--accent-clinical)" }}
+                                />
+                                <span style={{ color: "var(--text-secondary)" }}>{line}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
                       {differentials.length > 0 && (
                         <div className="space-y-2">
-                          <div
-                            className="font-mono-tech text-[10px] tracking-[0.18em] uppercase"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            DIFFERENTIAL CONSIDERATIONS
+                          <div className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                            Differential Considerations
                           </div>
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1.5">
                             {differentials.map((dx, i) => (
                               <span
                                 key={i}
                                 className="rounded-full border px-3 py-1 text-xs"
                                 style={{
-                                  borderColor: "var(--border-strong)",
+                                  borderColor: "var(--border-subtle)",
                                   backgroundColor: "var(--bg-secondary)",
                                   color: "var(--text-secondary)",
                                 }}
@@ -603,67 +621,89 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                         </div>
                       )}
 
-                      {compartmentEntries.length > 0 && (
-                        <div className="space-y-2.5">
-                          <div
-                            className="font-mono-tech text-[10px] tracking-[0.18em] uppercase"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            ANATOMICAL COMPARTMENTS
-                          </div>
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            {compartmentEntries.map(([comp, desc]) => (
-                              <div
-                                key={comp}
-                                className="rounded-2xl border p-4 space-y-1"
-                                style={{ borderColor: "var(--border-subtle)" }}
-                              >
-                                <div
-                                  className="font-mono-tech text-[10px] tracking-[0.14em] uppercase"
-                                  style={{ color: "var(--accent-optical)" }}
-                                >
-                                  {comp.replace(/_/g, " ")}
-                                </div>
-                                <p
-                                  className="text-xs leading-relaxed"
-                                  style={{ color: "var(--text-secondary)" }}
-                                >
-                                  {desc}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
+                      {/* Detailed Findings */}
                       <div
-                        className="border-t pt-5 space-y-2"
+                        className="border-t pt-5 space-y-1.5"
                         style={{ borderColor: "var(--border-subtle)" }}
                       >
-                        <div
-                          className="font-mono-tech text-[10px] tracking-[0.18em] uppercase"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          DETAILED RADIOLOGIC FINDINGS
+                        <div className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+                          Detailed Findings
                         </div>
                         <p
-                          className="whitespace-pre-line text-sm leading-relaxed"
+                          className="whitespace-pre-line text-[13.5px] leading-relaxed"
                           style={{ color: "var(--text-secondary)" }}
                         >
                           {report.findings}
                         </p>
                       </div>
+
+                      {/* Collapsible Anatomical Breakdown (Progressive Disclosure) */}
+                      {compartmentEntries.length > 0 && (
+                        <div
+                          className="border-t pt-4"
+                          style={{ borderColor: "var(--border-subtle)" }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setShowCompartments((v) => !v)}
+                            className="flex w-full cursor-pointer items-center justify-between text-xs font-medium"
+                            style={{ color: "var(--text-secondary)" }}
+                          >
+                            <span>Anatomical Compartments ({compartmentEntries.length})</span>
+                            {showCompartments ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </button>
+
+                          <AnimatePresence initial={false}>
+                            {showCompartments && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                  {compartmentEntries.map(([comp, desc]) => (
+                                    <div
+                                      key={comp}
+                                      className="rounded-xl border p-3.5 space-y-1"
+                                      style={{
+                                        borderColor: "var(--border-subtle)",
+                                        backgroundColor: "var(--bg-secondary)",
+                                      }}
+                                    >
+                                      <div
+                                        className="text-[11px] font-semibold capitalize"
+                                        style={{ color: "var(--accent-optical)" }}
+                                      >
+                                        {comp.replace(/_/g, " ")}
+                                      </div>
+                                      <p
+                                        className="text-xs leading-relaxed"
+                                        style={{ color: "var(--text-secondary)" }}
+                                      >
+                                        {desc}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {tab === "guidelines" && (
-                    <div className="space-y-6">
-                      <div className="space-y-2">
-                        <div
-                          className="font-mono-tech text-[10px] tracking-[0.18em] uppercase"
-                          style={{ color: "var(--accent-clinical)" }}
-                        >
-                          EVIDENCE-BASED RECOMMENDATIONS
+                    <div className="space-y-5">
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-semibold" style={{ color: "var(--accent-clinical)" }}>
+                          Evidence-Based Recommendations
                         </div>
                         <p className="whitespace-pre-line text-sm leading-relaxed">
                           {report.recommendations ||
@@ -672,17 +712,11 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                       </div>
 
                       <div
-                        className="rounded-2xl border p-5 space-y-2"
-                        style={{
-                          borderColor: "var(--border-subtle)",
-                          backgroundColor: "var(--bg-secondary)",
-                        }}
+                        className="border-t pt-5 space-y-1.5"
+                        style={{ borderColor: "var(--border-subtle)" }}
                       >
-                        <div
-                          className="font-mono-tech text-[10px] tracking-[0.18em] uppercase"
-                          style={{ color: "var(--accent-optical)" }}
-                        >
-                          THERAPEUTIC &amp; MANAGEMENT CONSIDERATIONS
+                        <div className="text-xs font-semibold" style={{ color: "var(--accent-optical)" }}>
+                          Management Considerations
                         </div>
                         <p
                           className="whitespace-pre-line text-sm leading-relaxed"
@@ -698,78 +732,65 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                   {tab === "patient" && (
                     <div className="space-y-4">
                       <div
-                        className="rounded-2xl border p-6 space-y-3"
+                        className="rounded-2xl border p-5 space-y-2.5"
                         style={{
                           borderColor: "var(--border-subtle)",
                           backgroundColor: "var(--bg-secondary)",
                         }}
                       >
-                        <div
-                          className="font-mono-tech text-[10px] tracking-[0.18em] uppercase"
-                          style={{ color: "var(--accent-clinical)" }}
-                        >
-                          PLAIN-LANGUAGE PATIENT EXPLANATION
+                        <div className="text-xs font-semibold" style={{ color: "var(--accent-clinical)" }}>
+                          Plain-Language Summary
                         </div>
-                        <p className="whitespace-pre-line text-[15px] leading-relaxed">
+                        <p className="whitespace-pre-line text-[14.5px] leading-relaxed">
                           {report.patient_summary ||
-                            "Your chest X-ray has been reviewed by an AI diagnostic support system. Please discuss these results directly with your physician."}
+                            "Your chest X-ray has been reviewed with AI diagnostic support. Please discuss these results directly with your doctor."}
                         </p>
                       </div>
-                      <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                        Designed for clear shared communication; verify with the attending
-                        radiologist before releasing to the patient portal.
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        Written for patient communication; verify with the attending radiologist before sharing.
                       </p>
                     </div>
                   )}
 
                   {tab === "signoff" && (
-                    <div className="space-y-5">
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <label className="space-y-1.5">
-                          <span
-                            className="font-mono-tech text-[10px] tracking-[0.14em] uppercase"
-                            style={{ color: "var(--text-muted)" }}
-                          >
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                        <label className="space-y-1">
+                          <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
                             Attending Physician
                           </span>
                           <input
                             type="text"
                             value={physicianName}
                             onChange={(e) => onPhysicianNameChange(e.target.value)}
-                            className="w-full rounded-xl border bg-transparent px-3.5 py-2.5 text-sm focus:outline-none"
+                            className="w-full rounded-xl border bg-transparent px-3.5 py-2 text-sm focus:border-teal-500/60 focus:outline-none"
                             style={{ borderColor: "var(--border-strong)" }}
                           />
                         </label>
-                        <label className="space-y-1.5">
-                          <span
-                            className="font-mono-tech text-[10px] tracking-[0.14em] uppercase"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            Credentials / Board
+                        <label className="space-y-1">
+                          <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                            Credentials
                           </span>
                           <input
                             type="text"
                             value={physicianCreds}
                             onChange={(e) => onPhysicianCredsChange(e.target.value)}
-                            className="w-full rounded-xl border bg-transparent px-3.5 py-2.5 text-sm focus:outline-none"
+                            className="w-full rounded-xl border bg-transparent px-3.5 py-2 text-sm focus:border-teal-500/60 focus:outline-none"
                             style={{ borderColor: "var(--border-strong)" }}
                           />
                         </label>
                       </div>
 
-                      <label className="block space-y-1.5">
-                        <span
-                          className="font-mono-tech text-[10px] tracking-[0.14em] uppercase"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Clinical Addendum / Correlation Notes
+                      <label className="block space-y-1">
+                        <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                          Clinical Notes / Addendum
                         </span>
                         <textarea
                           rows={3}
                           value={physicianNotes}
                           onChange={(e) => onPhysicianNotesChange(e.target.value)}
-                          placeholder="Optional comparison with prior radiographs or bedside exam..."
-                          className="w-full rounded-xl border bg-transparent px-3.5 py-2.5 text-sm focus:outline-none"
+                          placeholder="Optional comparison with prior radiographs..."
+                          className="w-full rounded-xl border bg-transparent px-3.5 py-2.5 text-sm focus:border-teal-500/60 focus:outline-none"
                           style={{ borderColor: "var(--border-strong)" }}
                         />
                       </label>
@@ -777,27 +798,27 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                       <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                         {signedAt ? (
                           <div
-                            className="flex items-center gap-2 font-mono-tech text-xs"
+                            className="flex items-center gap-1.5 text-xs font-medium"
                             style={{ color: "var(--accent-clinical)" }}
                           >
                             <ShieldCheck className="h-4 w-4" />
-                            <span>Digitally attested · {signedAt}</span>
+                            <span>Signed · {signedAt}</span>
                           </div>
                         ) : (
                           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                            Attestation stamps the printed PDF consultation sheet.
+                            Saves signature to the database and PDF sheet.
                           </span>
                         )}
                         <button
                           type="button"
                           onClick={onSignReport}
-                          className="cursor-pointer rounded-full px-5 py-2.5 text-xs font-semibold transition-transform active:scale-95"
+                          className="cursor-pointer rounded-full px-5 py-2 text-xs font-semibold transition-all hover:brightness-110 active:scale-[0.98]"
                           style={{
                             backgroundColor: "var(--accent-clinical)",
                             color: "#ffffff",
                           }}
                         >
-                          {signedAt ? "Update Signature" : "Sign & Attest Report"}
+                          {signedAt ? "Update Signature" : "Sign & Attest"}
                         </button>
                       </div>
                     </div>
@@ -808,104 +829,83 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
           </SpotlightCard>
         </div>
 
-        {/* RIGHT 5 COLS: Grounded Gemini Radiology Copilot */}
+        {/* RIGHT 5 COLS: Clean Grounded Radiology Copilot */}
         <div className="lg:col-span-5">
-          <div className="atelier-card flex h-[660px] flex-col overflow-hidden rounded-[26px]">
-            {/* Copilot Header */}
+          <div className="atelier-card flex h-[640px] flex-col overflow-hidden rounded-[24px]">
+            {/* Header */}
             <div
-              className="flex items-center justify-between border-b px-6 py-4"
+              className="flex items-center justify-between border-b px-5 py-3.5"
               style={{ borderColor: "var(--border-subtle)" }}
             >
               <div className="flex items-center gap-2.5">
                 <div
-                  className="flex h-8 w-8 items-center justify-center rounded-full border"
-                  style={{
-                    borderColor: "var(--accent-clinical)",
-                    backgroundColor: "var(--accent-clinical-dim)",
-                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full"
+                  style={{ backgroundColor: "var(--accent-clinical-dim)" }}
                 >
                   <Stethoscope className="h-4 w-4" style={{ color: "var(--accent-clinical)" }} />
                 </div>
                 <div>
-                  <div className="font-display text-sm font-bold">Gemini Radiology Copilot</div>
-                  <div
-                    className="font-mono-tech text-[10px]"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Grounded in live scores, CTR &amp; Grad-CAM++
+                  <div className="font-display text-sm font-bold">Radiology Copilot</div>
+                  <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                    Grounded in this scan &amp; patient record
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                {copilotMessages.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={onClearCopilot}
-                    title="Clear conversation"
-                    className="flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 font-mono-tech text-[10px] transition-opacity hover:opacity-80"
-                    style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
-                  >
-                    <RotateCcw className="h-3 w-3" />
-                    <span>Clear</span>
-                  </button>
-                )}
-                <Sparkles className="h-4 w-4" style={{ color: "var(--accent-clinical)" }} />
-              </div>
+              {copilotMessages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={onClearCopilot}
+                  title="Clear chat"
+                  className="flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors hover:border-teal-500/40"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  <span>Clear</span>
+                </button>
+              )}
             </div>
 
-            {/* Transcript */}
-            <div ref={chatScrollRef} className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+            {/* Conversation Transcript */}
+            <div ref={chatScrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
               {copilotMessages.length === 0 ? (
-                <div className="space-y-5 pt-4">
-                  <p
-                    className="text-sm leading-relaxed"
-                    style={{ color: "var(--text-secondary)" }}
-                  >
-                    Ask clinical questions about the active chest radiograph. Context from all 14
-                    pathology scores, cardiac biometry, and patient history is attached
-                    automatically.
+                <div className="space-y-4 pt-3">
+                  <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                    Ask anything about this radiograph — all 14 pathology scores, heart size, and
+                    patient history are attached automatically.
                   </p>
-                  <div className="space-y-2">
-                    <div
-                      className="font-mono-tech text-[10px] tracking-[0.16em] uppercase"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      SUGGESTED CLINICAL PROMPTS
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {COPILOT_SUGGESTIONS.map((q) => (
-                        <button
-                          key={q}
-                          type="button"
-                          disabled={!predictionData || copilotLoading}
-                          onClick={() => onSendCopilot(q)}
-                          className="cursor-pointer rounded-2xl border px-4 py-2.5 text-left text-xs font-medium transition-all hover:border-teal-500/40 disabled:opacity-50"
-                          style={{
-                            borderColor: "var(--border-subtle)",
-                            backgroundColor: "var(--bg-secondary)",
-                            color: "var(--text-primary)",
-                          }}
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="flex flex-col gap-2">
+                    {COPILOT_SUGGESTIONS.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        disabled={!predictionData || copilotLoading}
+                        onClick={() => onSendCopilot(q)}
+                        className="cursor-pointer rounded-2xl border px-3.5 py-2.5 text-left text-xs font-medium transition-all hover:border-teal-500/45 disabled:opacity-50"
+                        style={{
+                          borderColor: "var(--border-subtle)",
+                          backgroundColor: "var(--bg-secondary)",
+                          color: "var(--text-primary)",
+                        }}
+                      >
+                        {q}
+                      </button>
+                    ))}
                   </div>
                 </div>
               ) : (
                 copilotMessages.map((msg) => (
                   <motion.div
                     key={msg.id}
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                     className={`group flex flex-col ${
                       msg.role === "user" ? "items-end" : "items-start"
                     }`}
                   >
                     <div
-                      className="relative max-w-[92%] rounded-2xl border px-4 py-3 text-sm leading-relaxed"
+                      className="relative max-w-[92%] rounded-2xl border px-4 py-3 text-[13px] leading-relaxed"
                       style={{
                         borderColor:
                           msg.role === "user" ? "var(--accent-clinical)" : "var(--border-subtle)",
@@ -919,16 +919,15 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                         : msg.content}
                     </div>
                     <div
-                      className="mt-1 flex items-center gap-2 px-1 font-mono-tech text-[9.5px]"
+                      className="mt-1 flex items-center gap-2 px-1 text-[10px]"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      <span>{msg.role === "user" ? "Clinician" : msg.provider || "Gemini"}</span>
-                      {msg.latencyMs != null && <span>· {Math.round(msg.latencyMs)} ms</span>}
+                      <span>{msg.role === "user" ? "You" : "AI Copilot"}</span>
                       {msg.role === "assistant" && (
                         <button
                           type="button"
                           onClick={() => handleCopyMsg(msg.id, msg.content)}
-                          className="ml-1 cursor-pointer opacity-0 transition-opacity group-hover:opacity-100"
+                          className="cursor-pointer opacity-0 transition-opacity group-hover:opacity-100"
                           style={{ color: "var(--accent-clinical)" }}
                         >
                           {copiedMsgId === msg.id ? "Copied ✓" : "Copy"}
@@ -939,10 +938,9 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                 ))
               )}
 
-              {/* Animated 3-Bar Clinical Waveform Typing Indicator */}
               {copilotLoading && (
                 <div
-                  className="inline-flex items-center gap-2.5 rounded-2xl border px-4 py-2.5 font-mono-tech text-xs"
+                  className="inline-flex items-center gap-2.5 rounded-2xl border px-4 py-2.5 text-xs"
                   style={{
                     borderColor: "var(--border-subtle)",
                     backgroundColor: "var(--bg-secondary)",
@@ -956,24 +954,41 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                         className="w-0.5 rounded-full"
                         style={{ backgroundColor: "var(--accent-clinical)" }}
                         animate={{ height: ["4px", "12px", "4px"] }}
-                        transition={{
-                          duration: 0.9,
-                          repeat: Infinity,
-                          delay,
-                          ease: "easeInOut",
-                        }}
+                        transition={{ duration: 0.85, repeat: Infinity, delay, ease: "easeInOut" }}
                       />
                     ))}
                   </span>
-                  <span>Synthesizing clinical guidance...</span>
+                  <span>Thinking...</span>
                 </div>
               )}
             </div>
 
-            {/* Clean Input Form */}
+            {/* Quick Follow-Up Chips when chat is active */}
+            {copilotMessages.length > 0 && !copilotLoading && (
+              <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto px-4 pb-2">
+                {QUICK_FOLLOWUPS.map((chip) => (
+                  <button
+                    key={chip.label}
+                    type="button"
+                    disabled={!predictionData}
+                    onClick={() => onSendCopilot(chip.q)}
+                    className="shrink-0 cursor-pointer rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap transition-colors hover:border-teal-500/45"
+                    style={{
+                      borderColor: "var(--border-subtle)",
+                      backgroundColor: "var(--bg-secondary)",
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Input Form */}
             <form
               onSubmit={handleSend}
-              className="flex items-center gap-2 border-t p-4"
+              className="flex items-center gap-2 border-t p-3.5"
               style={{ borderColor: "var(--border-subtle)" }}
             >
               <input
@@ -981,15 +996,15 @@ export const ClinicalReportSection: React.FC<ClinicalReportSectionProps> = ({
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 disabled={!predictionData || copilotLoading}
-                placeholder="Ask about findings, guidelines, differentials..."
-                className="flex-1 rounded-full border bg-transparent px-4 py-2.5 text-xs focus:outline-none disabled:opacity-50"
+                placeholder="Ask a follow-up question..."
+                className="flex-1 rounded-full border bg-transparent px-4 py-2 text-xs focus:border-teal-500/60 focus:outline-none disabled:opacity-50"
                 style={{ borderColor: "var(--border-strong)" }}
               />
               <button
                 type="submit"
                 disabled={!predictionData || !chatInput.trim() || copilotLoading}
                 aria-label="Send message to Radiology Copilot"
-                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-transform active:scale-95 disabled:opacity-40"
+                className="flex h-8.5 w-8.5 shrink-0 cursor-pointer items-center justify-center rounded-full transition-all hover:brightness-110 active:scale-95 disabled:opacity-40"
                 style={{
                   backgroundColor: "var(--accent-clinical)",
                   color: "#ffffff",

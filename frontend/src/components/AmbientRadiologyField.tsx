@@ -16,11 +16,10 @@ interface GridPulse {
 }
 
 /**
- * Full-viewport GPU-friendly atmospheric radiology canvas:
- * - Precision calibrated 64px DICOM coordinate grid
- * - Subtle optical '+' fiducials at every 3rd intersection that softly illuminate near the pointer
- * - Slow traveling radiographic light pulses gliding along coordinate tracks
- * - Soft breathing volumetric pulmonary aura gradients (CSS composited)
+ * Calm, GPU-friendly ambient clinical backdrop:
+ * - Whisper-soft 72px coordinate grid (never competes with medical typography)
+ * - Soft pointer-responsive '+' fiducials
+ * - Slow traveling optical light pulses (automatically pauses when tab is hidden)
  */
 export const AmbientRadiologyField: React.FC<AmbientRadiologyFieldProps> = ({ theme }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -38,7 +37,7 @@ export const AmbientRadiologyField: React.FC<AmbientRadiologyFieldProps> = ({ th
     let rafId = 0;
     let width = window.innerWidth;
     let height = window.innerHeight;
-    const cell = 64;
+    const cell = 72;
 
     const pointer = { x: -1000, y: -1000, tx: -1000, ty: -1000 };
     const onMouseMove = (e: MouseEvent) => {
@@ -63,37 +62,40 @@ export const AmbientRadiologyField: React.FC<AmbientRadiologyFieldProps> = ({ th
     resize();
     window.addEventListener("resize", resize);
 
-    // Spawn 7 gentle traveling calibration light beams
     const spawnPulse = (initial = false): GridPulse => {
-      const horizontal = Math.random() > 0.42;
+      const horizontal = Math.random() > 0.45;
       const maxTrack = Math.max(2, Math.floor((horizontal ? height : width) / cell));
       return {
         horizontal,
         track: Math.floor(Math.random() * maxTrack) * cell,
         pos: initial ? Math.random() * (horizontal ? width : height) : -140,
-        speed: 0.45 + Math.random() * 0.75,
-        length: 90 + Math.random() * 110,
-        alpha: 0.14 + Math.random() * 0.16,
+        speed: 0.35 + Math.random() * 0.55,
+        length: 85 + Math.random() * 95,
+        alpha: 0.09 + Math.random() * 0.11,
         tint: Math.random() > 0.35 ? "teal" : "ice",
       };
     };
 
-    const pulses: GridPulse[] = Array.from({ length: 7 }, () => spawnPulse(true));
+    const pulses: GridPulse[] = Array.from({ length: 5 }, () => spawnPulse(true));
 
     const draw = () => {
+      if (document.hidden) {
+        rafId = requestAnimationFrame(draw);
+        return;
+      }
+
       ctx.clearRect(0, 0, width, height);
 
-      // Smooth spring lerp toward pointer
-      pointer.x += (pointer.tx - pointer.x) * 0.08;
-      pointer.y += (pointer.ty - pointer.y) * 0.08;
+      pointer.x += (pointer.tx - pointer.x) * 0.07;
+      pointer.y += (pointer.ty - pointer.y) * 0.07;
 
       const isDark = theme === "dark";
-      const gridStroke = isDark ? "rgba(186, 218, 238, 0.032)" : "rgba(12, 22, 31, 0.038)";
-      const fiducialBase = isDark ? "rgba(186, 218, 238, 0.085)" : "rgba(12, 22, 31, 0.08)";
+      const gridStroke = isDark ? "rgba(186, 218, 238, 0.02)" : "rgba(15, 25, 35, 0.025)";
+      const fiducialBase = isDark ? "rgba(186, 218, 238, 0.055)" : "rgba(15, 25, 35, 0.055)";
       const tealRgb = isDark ? "20, 184, 166" : "13, 148, 136";
       const iceRgb = isDark ? "56, 189, 248" : "2, 132, 199";
 
-      // 1. Hairline Calibrated Coordinate Grid
+      // 1. Hairline Coordinate Grid
       ctx.beginPath();
       for (let x = 0; x <= width; x += cell) {
         ctx.moveTo(x + 0.5, 0);
@@ -107,28 +109,28 @@ export const AmbientRadiologyField: React.FC<AmbientRadiologyFieldProps> = ({ th
       ctx.lineWidth = 1;
       ctx.stroke();
 
-      // 2. Optical '+' Fiducial Crosshairs (brighten subtly under cursor spotlight)
+      // 2. Subtle Optical '+' Fiducials
       const majorStep = cell * 3;
       for (let x = majorStep; x < width; x += majorStep) {
         for (let y = majorStep; y < height; y += majorStep) {
           const dist = Math.hypot(x - pointer.x, y - pointer.y);
-          const prox = dist < 240 ? 1 - dist / 240 : 0;
-          const arm = 3.5 + prox * 2.5;
+          const prox = dist < 210 ? 1 - dist / 210 : 0;
+          const arm = 3 + prox * 2;
           ctx.beginPath();
           ctx.moveTo(x - arm, y + 0.5);
           ctx.lineTo(x + arm, y + 0.5);
           ctx.moveTo(x + 0.5, y - arm);
           ctx.lineTo(x + 0.5, y + arm);
           ctx.strokeStyle =
-            prox > 0.05
-              ? `rgba(${tealRgb}, ${(0.12 + prox * 0.42).toFixed(3)})`
+            prox > 0.06
+              ? `rgba(${tealRgb}, ${(0.09 + prox * 0.3).toFixed(3)})`
               : fiducialBase;
           ctx.lineWidth = 1;
           ctx.stroke();
         }
       }
 
-      // 3. Traveling Optical Calibration Beams along grid tracks
+      // 3. Calm Traveling Calibration Beams
       if (!prefersReduced) {
         pulses.forEach((p, idx) => {
           p.pos += p.speed;
@@ -139,59 +141,41 @@ export const AmbientRadiologyField: React.FC<AmbientRadiologyFieldProps> = ({ th
           }
 
           const rgb = p.tint === "teal" ? tealRgb : iceRgb;
-          const a = isDark ? p.alpha : p.alpha * 0.72;
+          const a = isDark ? p.alpha : p.alpha * 0.65;
 
           if (p.horizontal) {
             const grad = ctx.createLinearGradient(p.pos - p.length, p.track, p.pos, p.track);
             grad.addColorStop(0, `rgba(${rgb}, 0)`);
-            grad.addColorStop(0.75, `rgba(${rgb}, ${(a * 0.65).toFixed(3)})`);
+            grad.addColorStop(0.75, `rgba(${rgb}, ${(a * 0.6).toFixed(3)})`);
             grad.addColorStop(1, `rgba(${rgb}, ${a.toFixed(3)})`);
             ctx.strokeStyle = grad;
-            ctx.lineWidth = 1.2;
+            ctx.lineWidth = 1.1;
             ctx.beginPath();
             ctx.moveTo(p.pos - p.length, p.track + 0.5);
             ctx.lineTo(p.pos, p.track + 0.5);
             ctx.stroke();
-
-            // Soft luminous head dot
-            ctx.fillStyle = `rgba(${rgb}, ${(a * 1.6).toFixed(3)})`;
-            ctx.beginPath();
-            ctx.arc(p.pos, p.track + 0.5, 1.5, 0, Math.PI * 2);
-            ctx.fill();
           } else {
             const grad = ctx.createLinearGradient(p.track, p.pos - p.length, p.track, p.pos);
             grad.addColorStop(0, `rgba(${rgb}, 0)`);
-            grad.addColorStop(0.75, `rgba(${rgb}, ${(a * 0.65).toFixed(3)})`);
+            grad.addColorStop(0.75, `rgba(${rgb}, ${(a * 0.6).toFixed(3)})`);
             grad.addColorStop(1, `rgba(${rgb}, ${a.toFixed(3)})`);
             ctx.strokeStyle = grad;
-            ctx.lineWidth = 1.2;
+            ctx.lineWidth = 1.1;
             ctx.beginPath();
             ctx.moveTo(p.track + 0.5, p.pos - p.length);
             ctx.lineTo(p.track + 0.5, p.pos);
             ctx.stroke();
-
-            ctx.fillStyle = `rgba(${rgb}, ${(a * 1.6).toFixed(3)})`;
-            ctx.beginPath();
-            ctx.arc(p.track + 0.5, p.pos, 1.5, 0, Math.PI * 2);
-            ctx.fill();
           }
         });
       }
 
-      // 4. Whisper-soft cursor illumination halo
+      // 4. Soft Cursor Glow
       if (pointer.x > -200 && pointer.y > -200) {
-        const halo = ctx.createRadialGradient(
-          pointer.x,
-          pointer.y,
-          0,
-          pointer.x,
-          pointer.y,
-          260
-        );
-        halo.addColorStop(0, `rgba(${tealRgb}, ${isDark ? 0.055 : 0.045})`);
+        const halo = ctx.createRadialGradient(pointer.x, pointer.y, 0, pointer.x, pointer.y, 240);
+        halo.addColorStop(0, `rgba(${tealRgb}, ${isDark ? 0.04 : 0.032})`);
         halo.addColorStop(1, `rgba(${tealRgb}, 0)`);
         ctx.fillStyle = halo;
-        ctx.fillRect(pointer.x - 260, pointer.y - 260, 520, 520);
+        ctx.fillRect(pointer.x - 240, pointer.y - 240, 480, 480);
       }
 
       if (!prefersReduced) {
@@ -214,36 +198,24 @@ export const AmbientRadiologyField: React.FC<AmbientRadiologyFieldProps> = ({ th
       aria-hidden="true"
       className="no-print pointer-events-none fixed inset-0 z-0 overflow-hidden"
     >
-      {/* Volumetric Breathing Pulmonary Optical Auras */}
       <div
-        className="aura-breathe-a absolute -top-44 -left-32 h-[540px] w-[540px] rounded-full blur-[128px]"
+        className="aura-breathe-a absolute -top-48 -left-36 h-[520px] w-[520px] rounded-full blur-[132px]"
         style={{
           background:
             theme === "dark"
-              ? "radial-gradient(circle, rgba(20, 184, 166, 0.16) 0%, transparent 70%)"
-              : "radial-gradient(circle, rgba(13, 148, 136, 0.13) 0%, transparent 70%)",
+              ? "radial-gradient(circle, rgba(20, 184, 166, 0.13) 0%, transparent 70%)"
+              : "radial-gradient(circle, rgba(13, 148, 136, 0.1) 0%, transparent 70%)",
         }}
       />
       <div
-        className="aura-breathe-b absolute top-[28%] -right-40 h-[580px] w-[580px] rounded-full blur-[140px]"
+        className="aura-breathe-b absolute top-[26%] -right-44 h-[540px] w-[540px] rounded-full blur-[144px]"
         style={{
           background:
             theme === "dark"
-              ? "radial-gradient(circle, rgba(56, 189, 248, 0.12) 0%, transparent 70%)"
-              : "radial-gradient(circle, rgba(2, 132, 199, 0.1) 0%, transparent 70%)",
+              ? "radial-gradient(circle, rgba(56, 189, 248, 0.09) 0%, transparent 70%)"
+              : "radial-gradient(circle, rgba(2, 132, 199, 0.08) 0%, transparent 70%)",
         }}
       />
-      <div
-        className="aura-breathe-a absolute -bottom-48 left-[32%] h-[500px] w-[500px] rounded-full blur-[140px]"
-        style={{
-          background:
-            theme === "dark"
-              ? "radial-gradient(circle, rgba(20, 184, 166, 0.1) 0%, transparent 70%)"
-              : "radial-gradient(circle, rgba(13, 148, 136, 0.08) 0%, transparent 70%)",
-        }}
-      />
-
-      {/* Precision DICOM Coordinate Grid + Traveling Optical Beams */}
       <canvas ref={canvasRef} className="h-full w-full" />
     </div>
   );
