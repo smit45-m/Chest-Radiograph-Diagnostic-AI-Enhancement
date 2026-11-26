@@ -30,6 +30,7 @@ import {
   type PageId,
 } from "../data/clinicalCatalog";
 import type {
+  AnalysisStage,
   CaliperMeasurement,
   ColormapName,
   HeatmapData,
@@ -54,6 +55,7 @@ interface DiagnosticStudioProps {
   colormap: ColormapName;
   patient: PatientProfile;
   isAnalyzing: boolean;
+  analysisStage?: AnalysisStage;
   holdingSpace: boolean;
   onSelectSample: (sample: SampleCase) => void;
   onFileUpload: (file: File) => void;
@@ -66,6 +68,12 @@ interface DiagnosticStudioProps {
 }
 
 type ViewMode = "heatmap" | "anatomy" | "compare" | "original";
+
+const CLINICAL_MODES = [
+  { id: "screening", label: "Screening", value: 0.35, hint: "High Recall" },
+  { id: "balanced", label: "Balanced", value: 0.5, hint: "Optimal F1" },
+  { id: "precision", label: "High-Spec", value: 0.62, hint: "Rule-In" },
+] as const;
 
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -89,6 +97,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
   colormap,
   patient,
   isAnalyzing,
+  analysisStage = "idle",
   holdingSpace,
   onSelectSample,
   onFileUpload,
@@ -524,7 +533,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
     }
   };
 
-  const resetView = () => {
+  const resetView = useCallback(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setWindowPreset("standard");
@@ -532,7 +541,36 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
     setLoupeActive(false);
     setCaliperMode(false);
     setCalipers([]);
-  };
+  }, []);
+
+  // Radiologist PACS Keyboard Shortcuts (H/A/C/O view modes, I invert, L loupe, M measure, R reset)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target;
+      if (t instanceof HTMLElement) {
+        const tag = t.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable) return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === "h") setViewMode("heatmap");
+      else if (k === "a") setViewMode("anatomy");
+      else if (k === "c") setViewMode("compare");
+      else if (k === "o") setViewMode("original");
+      else if (k === "i") setWindowPreset((prev) => (prev === "inverted" ? "standard" : "inverted"));
+      else if (k === "l") {
+        setLoupeActive((v) => !v);
+        setCaliperMode(false);
+      } else if (k === "m") {
+        setCaliperMode((v) => !v);
+        setLoupeActive(false);
+      } else if (k === "r") {
+        resetView();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [resetView]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -563,7 +601,14 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
     predictionData?.report?.critical_alert || rawTriage.toUpperCase().includes("STAT")
   );
   const ctr = anatomy?.ctr ?? null;
+  const isApView = Boolean(
+    (anatomy?.projection_view || decision?.projection_view || "").toUpperCase().includes("AP")
+  );
+  const ctrNormalCutoff = isApView ? 0.55 : 0.5;
+  const ctrEnlargedCutoff = anatomy?.ctr_cutoff ?? (isApView ? 0.58 : 0.53);
   const ctrPct = ctr != null ? Math.min(100, Math.max(0, ((ctr - 0.3) / 0.4) * 100)) : 0;
+  const ctrMarkerPct = ((ctrNormalCutoff - 0.3) / 0.4) * 100;
+  const ctrIsAlert = ctr != null && ctr >= ctrNormalCutoff;
 
   return (
     <div className="mx-auto max-w-[1280px] px-5 py-6 pb-24 md:px-8 md:py-7 lg:pb-10">
@@ -928,7 +973,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
               </div>
             )}
 
-            {isAnalyzing && (
+            {isAnalyzing && analysisStage === "vision" && (
               <div className="absolute inset-0 overflow-hidden bg-black/55 backdrop-blur-[2px]">
                 <div
                   className="scan-beam h-24 w-full"
@@ -940,19 +985,37 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="flex items-center gap-2.5 rounded-full border border-white/15 bg-black/88 px-4 py-2 text-xs font-medium text-white shadow-2xl">
                     <span className="h-2 w-2 rounded-full bg-teal-400 clinical-led" />
-                    <span>Analyzing radiograph...</span>
+                    <span>Running 4-CNN ensemble &amp; Grad-CAM++...</span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Non-blocking Progressive Background Refinement Pill (Lightbox Already Interactive!) */}
+            {isAnalyzing && analysisStage !== "vision" && (
+              <div className="pointer-events-none absolute top-3.5 left-3.5 flex items-center gap-2 rounded-full border border-teal-400/45 bg-black/82 px-3 py-1.5 text-[11px] font-medium text-teal-200 backdrop-blur-md">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-400 clinical-led" />
+                <span>
+                  {analysisStage === "consensus"
+                    ? "Fusing Gemini Decision 1..."
+                    : "Synthesizing ACR report..."}
+                </span>
               </div>
             )}
           </div>
 
           <div
-            className="flex items-center justify-between px-1 text-[11px]"
+            className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px]"
             style={{ color: "var(--text-muted)" }}
           >
-            <span>Hold Space to peek original X-ray</span>
-            <span>Ctrl + Scroll to zoom</span>
+            <span>Space: peek original · H/A/C/O: views · I: invert · M: measure</span>
+            <span className="font-mono-tech">
+              {predictionData?.cache_hit
+                ? `Instant Cache · ${Math.max(1, Math.round(predictionData.inference_time_ms))} ms`
+                : predictionData?.vision_latency_ms
+                ? `Vision · ${Math.round(predictionData.vision_latency_ms)} ms`
+                : "Ctrl + Scroll to zoom"}
+            </span>
           </div>
         </div>
 
@@ -1035,7 +1098,18 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 font-medium">
                   <HeartPulse className="h-3.5 w-3.5" style={{ color: "var(--accent-clinical)" }} />
-                  Heart Size (CTR)
+                  <span>Heart Size (CTR)</span>
+                  {isApView && (
+                    <span
+                      className="rounded-full px-1.5 py-0.5 font-mono-tech text-[9.5px]"
+                      style={{
+                        backgroundColor: "var(--accent-optical-dim)",
+                        color: "var(--accent-optical)",
+                      }}
+                    >
+                      AP Adjusted
+                    </span>
+                  )}
                 </span>
                 <div className="flex items-center gap-2 font-mono-tech">
                   <AnimatedNumber
@@ -1043,14 +1117,17 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                     decimals={3}
                     className="font-semibold"
                     style={{
-                      color:
-                        ctr != null && ctr > 0.5
-                          ? "var(--accent-alert)"
-                          : "var(--accent-clinical)",
+                      color: ctrIsAlert ? "var(--accent-alert)" : "var(--accent-clinical)",
                     }}
                   />
                   <span className="text-[10.5px]" style={{ color: "var(--text-muted)" }}>
-                    {ctr != null ? (ctr > 0.53 ? "Enlarged" : ctr > 0.5 ? "Borderline" : "Normal") : "—"}
+                    {ctr != null
+                      ? ctr >= ctrEnlargedCutoff
+                        ? "Enlarged"
+                        : ctr >= ctrNormalCutoff
+                        ? "Borderline"
+                        : "Normal"
+                      : "—"}
                   </span>
                 </div>
               </div>
@@ -1065,14 +1142,16 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                   transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
                   className="h-full rounded-full"
                   style={{
-                    backgroundColor:
-                      ctr != null && ctr > 0.5 ? "var(--accent-alert)" : "var(--accent-clinical)",
+                    backgroundColor: ctrIsAlert ? "var(--accent-alert)" : "var(--accent-clinical)",
                   }}
                 />
                 <div
-                  className="absolute top-1/2 left-1/2 h-3 w-[1.5px] -translate-x-1/2 -translate-y-1/2"
-                  style={{ backgroundColor: "var(--text-primary)" }}
-                  title="0.50 clinical cutoff"
+                  className="absolute top-1/2 h-3 w-[1.5px] -translate-x-1/2 -translate-y-1/2"
+                  style={{
+                    left: `${ctrMarkerPct}%`,
+                    backgroundColor: "var(--text-primary)",
+                  }}
+                  title={`${ctrNormalCutoff.toFixed(2)} clinical cutoff`}
                 />
               </div>
 
@@ -1081,7 +1160,9 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                 style={{ color: "var(--text-muted)" }}
               >
                 <span>0.30</span>
-                <span>0.50 normal limit</span>
+                <span>
+                  {ctrNormalCutoff.toFixed(2)} {isApView ? "AP portable limit" : "PA normal limit"}
+                </span>
                 <span>0.70</span>
               </div>
             </div>
@@ -1146,26 +1227,54 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                   className="overflow-hidden"
                 >
                   <div
-                    className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-xs"
+                    className="space-y-2.5 rounded-xl border p-3 text-xs"
                     style={{
                       borderColor: "var(--border-subtle)",
                       backgroundColor: "var(--bg-secondary)",
                     }}
                   >
-                    <span style={{ color: "var(--text-secondary)" }}>Detection cutoff</span>
-                    <input
-                      type="range"
-                      min={0.25}
-                      max={0.75}
-                      step={0.05}
-                      value={threshold}
-                      onChange={(e) => onThresholdChange(Number(e.target.value))}
-                      aria-label="Diagnostic cutoff threshold"
-                      className="clinical-slider w-28"
-                    />
-                    <span className="font-mono-tech font-semibold">
-                      {Math.round(threshold * 100)}%
-                    </span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {CLINICAL_MODES.map((m) => {
+                        const active = Math.abs(threshold - m.value) < 0.025;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => onThresholdChange(m.value)}
+                            className="cursor-pointer rounded-lg border px-2 py-1.5 text-center transition-colors"
+                            style={{
+                              borderColor: active ? "var(--accent-clinical)" : "var(--border-subtle)",
+                              backgroundColor: active ? "var(--accent-clinical-dim)" : "var(--bg-elevated)",
+                              color: active ? "var(--text-primary)" : "var(--text-secondary)",
+                            }}
+                          >
+                            <div className="text-[11px] font-semibold">{m.label}</div>
+                            <div
+                              className="font-mono-tech text-[9.5px]"
+                              style={{ color: active ? "var(--accent-clinical)" : "var(--text-muted)" }}
+                            >
+                              {Math.round(m.value * 100)}% · {m.hint}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between gap-3 pt-0.5">
+                      <span style={{ color: "var(--text-secondary)" }}>Fine cutoff</span>
+                      <input
+                        type="range"
+                        min={0.25}
+                        max={0.75}
+                        step={0.01}
+                        value={threshold}
+                        onChange={(e) => onThresholdChange(Number(e.target.value))}
+                        aria-label="Diagnostic cutoff threshold"
+                        className="clinical-slider w-28"
+                      />
+                      <span className="font-mono-tech font-semibold">
+                        {Math.round(threshold * 100)}%
+                      </span>
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -1174,6 +1283,11 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
             <div className="space-y-1.5">
               {visiblePredictions.map((pred) => {
                 const isPos = pred.score >= threshold;
+                const isReview =
+                  !isPos &&
+                  (pred.review_flag === "borderline" ||
+                    pred.review_flag === "uncertain" ||
+                    pred.score >= 0.3);
                 const isSelected = activePathology === pred.name;
                 const note = PATHOLOGY_CLINICAL_NOTE[pred.name];
 
@@ -1203,6 +1317,8 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                           style={{
                             backgroundColor: isPos
                               ? "var(--accent-alert)"
+                              : isReview
+                              ? "var(--accent-amber)"
                               : isSelected
                               ? "var(--accent-clinical)"
                               : "var(--border-strong)",
@@ -1211,6 +1327,18 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                         <span className="truncate text-[13.5px] font-medium">
                           {formatPathology(pred.name)}
                         </span>
+                        {isReview && (
+                          <span
+                            title="Sub-threshold borderline or inter-model uncertainty — verify clinically"
+                            className="shrink-0 rounded-full px-1.5 py-0.5 font-mono-tech text-[9.5px] font-medium"
+                            style={{
+                              backgroundColor: "var(--accent-amber-dim)",
+                              color: "var(--accent-amber)",
+                            }}
+                          >
+                            Verify
+                          </span>
+                        )}
                       </div>
                       <span
                         className="font-mono-tech text-xs font-semibold"

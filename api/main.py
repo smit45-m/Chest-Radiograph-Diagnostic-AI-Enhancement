@@ -18,8 +18,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -104,6 +105,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+class _StreamSafeGZipMiddleware(GZipMiddleware):
+    """Compress all JSON/static payloads while leaving NDJSON/SSE streaming endpoints unbuffered."""
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("path", "").endswith("/stream"):
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -111,6 +122,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(_StreamSafeGZipMiddleware, minimum_size=512)
+
+
+@app.middleware("http")
+async def add_cache_control_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/assets/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+    elif path.startswith("/api/v1/samples/"):
+        response.headers.setdefault("Cache-Control", "public, max-age=3600")
+    return response
 
 app.include_router(health_router)
 app.include_router(predict_router)

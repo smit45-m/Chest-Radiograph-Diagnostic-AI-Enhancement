@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
 from pathlib import Path
@@ -30,21 +31,21 @@ _LEGACY_EVAL_PATH = (
 
 
 # ------------------------------------------------------------------
-# Users / Patient Clinical Database Endpoints
+# Users / Patient Clinical Database Endpoints (Non-Blocking Offload)
 # ------------------------------------------------------------------
 
 
 @router.get("/users")
 async def list_users() -> list[dict[str, Any]]:
     """List all persisted user / patient records with study counts and latest CTR."""
-    return CLINICAL_DB.list_users()
+    return await asyncio.to_thread(CLINICAL_DB.list_users)
 
 
 @router.post("/users", status_code=201)
 async def create_user(payload: UserCreateRequest) -> dict[str, Any]:
     """Create a new persistent user/patient clinical record in SQLite."""
     try:
-        user = CLINICAL_DB.create_user(payload.model_dump())
+        user = await asyncio.to_thread(CLINICAL_DB.create_user, payload.model_dump())
     except sqlite3.IntegrityError as exc:
         raise HTTPException(
             status_code=409, detail="A user with that MRN already exists."
@@ -60,7 +61,7 @@ async def create_user(payload: UserCreateRequest) -> dict[str, Any]:
 @router.get("/users/{user_id}")
 async def get_user(user_id: str) -> dict[str, Any]:
     """Retrieve a particular user's full profile, longitudinal CTR history, and diagnostic studies."""
-    user = CLINICAL_DB.get_user(user_id)
+    user = await asyncio.to_thread(CLINICAL_DB.get_user, user_id)
     if not user:
         raise HTTPException(status_code=404, detail=f"User '{user_id}' not found")
     return user
@@ -70,7 +71,9 @@ async def get_user(user_id: str) -> dict[str, Any]:
 async def update_user(user_id: str, payload: UserUpdateRequest) -> dict[str, Any]:
     """Update a particular user's clinical demographics, history, notes, or UI preferences."""
     try:
-        updated = CLINICAL_DB.update_user(user_id, payload.model_dump(exclude_none=True))
+        updated = await asyncio.to_thread(
+            CLINICAL_DB.update_user, user_id, payload.model_dump(exclude_none=True)
+        )
     except sqlite3.IntegrityError as exc:
         raise HTTPException(
             status_code=409, detail="MRN conflict with another user record."
@@ -88,7 +91,7 @@ async def update_user(user_id: str, payload: UserUpdateRequest) -> dict[str, Any
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str) -> dict[str, Any]:
     """Delete a user record and cascade-delete associated study records."""
-    ok = CLINICAL_DB.delete_user(user_id)
+    ok = await asyncio.to_thread(CLINICAL_DB.delete_user, user_id)
     if not ok:
         raise HTTPException(status_code=404, detail=f"User '{user_id}' not found")
     return {"deleted": True, "user_id": user_id}
@@ -102,15 +105,15 @@ async def delete_user(user_id: str) -> dict[str, Any]:
 @router.get("/users/{user_id}/studies")
 async def list_user_studies(user_id: str, include_payload: bool = False) -> list[dict[str, Any]]:
     """List chronological diagnostic studies & transcripts archived for a specific user."""
-    if not CLINICAL_DB.get_user(user_id):
+    if not await asyncio.to_thread(CLINICAL_DB.get_user, user_id):
         raise HTTPException(status_code=404, detail=f"User '{user_id}' not found")
-    return CLINICAL_DB.list_user_studies(user_id, include_payload=include_payload)
+    return await asyncio.to_thread(CLINICAL_DB.list_user_studies, user_id, include_payload)
 
 
 @router.get("/studies/{study_id}")
 async def get_study(study_id: str) -> dict[str, Any]:
     """Load a full archived diagnostic study, real AI transcript, and Copilot history."""
-    study = CLINICAL_DB.get_study(study_id)
+    study = await asyncio.to_thread(CLINICAL_DB.get_study, study_id)
     if not study:
         raise HTTPException(status_code=404, detail=f"Study '{study_id}' not found")
     return study
@@ -119,7 +122,9 @@ async def get_study(study_id: str) -> dict[str, Any]:
 @router.patch("/studies/{study_id}")
 async def update_study(study_id: str, payload: StudyUpdateRequest) -> dict[str, Any]:
     """Update an archived study (e.g. edited dictation transcript, re-synthesized report, physician attestation)."""
-    updated = CLINICAL_DB.update_study(study_id, payload.model_dump(exclude_none=True))
+    updated = await asyncio.to_thread(
+        CLINICAL_DB.update_study, study_id, payload.model_dump(exclude_none=True)
+    )
     if not updated:
         raise HTTPException(status_code=404, detail=f"Study '{study_id}' not found")
     TELEMETRY_HUB.record_breadcrumb(
@@ -133,7 +138,7 @@ async def update_study(study_id: str, payload: StudyUpdateRequest) -> dict[str, 
 @router.delete("/studies/{study_id}")
 async def delete_study(study_id: str) -> dict[str, Any]:
     """Delete a specific archived study record."""
-    ok = CLINICAL_DB.delete_study(study_id)
+    ok = await asyncio.to_thread(CLINICAL_DB.delete_study, study_id)
     if not ok:
         raise HTTPException(status_code=404, detail=f"Study '{study_id}' not found")
     return {"deleted": True, "study_id": study_id}
@@ -142,15 +147,15 @@ async def delete_study(study_id: str) -> dict[str, Any]:
 @router.get("/studies/{study_id}/copilot")
 async def get_study_copilot(study_id: str) -> list[dict[str, Any]]:
     """Retrieve persisted grounded Gemini Copilot consultation transcript for a study."""
-    if not CLINICAL_DB.get_study(study_id):
+    if not await asyncio.to_thread(CLINICAL_DB.get_study, study_id):
         raise HTTPException(status_code=404, detail=f"Study '{study_id}' not found")
-    return CLINICAL_DB.list_copilot_messages(study_id)
+    return await asyncio.to_thread(CLINICAL_DB.list_copilot_messages, study_id)
 
 
 @router.get("/db/stats")
 async def get_db_stats() -> dict[str, Any]:
     """Return SQLite database record statistics."""
-    return CLINICAL_DB.stats()
+    return await asyncio.to_thread(CLINICAL_DB.stats)
 
 
 # ------------------------------------------------------------------
@@ -164,7 +169,8 @@ async def get_evaluation_report() -> dict[str, Any]:
     for path in (_EVAL_REPORT_PATH, _LEGACY_EVAL_PATH):
         if path.exists():
             try:
-                return json.loads(path.read_text(encoding="utf-8"))
+                raw_text = await asyncio.to_thread(path.read_text, encoding="utf-8")
+                return json.loads(raw_text)
             except Exception as exc:
                 raise HTTPException(
                     status_code=500, detail=f"Failed to read evaluation report: {exc}"

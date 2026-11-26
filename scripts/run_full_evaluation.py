@@ -276,6 +276,7 @@ def main() -> None:
             use_llm=True,
             colormap="turbo",
             run_segmentation=True,
+            bypass_cache=True,
         )
 
         pred_map = {p["name"]: p for p in res["predictions"]}
@@ -358,6 +359,8 @@ def main() -> None:
         )
 
     fused_metrics = compute_suite_metrics(y_true, y_fused, threshold=0.50)
+    screening_metrics = compute_suite_metrics(y_true, y_fused, threshold=0.35)
+    precision_metrics = compute_suite_metrics(y_true, y_fused, threshold=0.62)
     cnn_metrics = compute_suite_metrics(y_true, y_cnn, threshold=0.50)
     backbone_comparison = {
         "densenet121_all": compute_suite_metrics(y_true, backbone_mats["densenet121_all"], 0.50),
@@ -377,6 +380,32 @@ def main() -> None:
         "cases_evaluated": n_cases,
         "total_pathology_judgments": n_cases * n_classes,
         "headline_metrics": fused_metrics,
+        "operating_profiles": {
+            "screening_35": {
+                "threshold": 0.35,
+                "accuracy": screening_metrics["accuracy"],
+                "sensitivity": screening_metrics["sensitivity"],
+                "specificity": screening_metrics["specificity"],
+                "precision": screening_metrics["precision"],
+                "f1_score": screening_metrics["f1_score"],
+            },
+            "balanced_50": {
+                "threshold": 0.50,
+                "accuracy": fused_metrics["accuracy"],
+                "sensitivity": fused_metrics["sensitivity"],
+                "specificity": fused_metrics["specificity"],
+                "precision": fused_metrics["precision"],
+                "f1_score": fused_metrics["f1_score"],
+            },
+            "high_precision_62": {
+                "threshold": 0.62,
+                "accuracy": precision_metrics["accuracy"],
+                "sensitivity": precision_metrics["sensitivity"],
+                "specificity": precision_metrics["specificity"],
+                "precision": precision_metrics["precision"],
+                "f1_score": precision_metrics["f1_score"],
+            },
+        },
         "backbone_comparison": {
             k: {
                 "accuracy": v["accuracy"],

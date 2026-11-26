@@ -1,6 +1,7 @@
 export type ThemeMode = "dark" | "light";
 export type ColormapName = "turbo" | "inferno" | "clinical" | "viridis" | "jet";
 export type WindowPreset = "standard" | "lung" | "bone" | "inverted";
+export type AnalysisStage = "idle" | "vision" | "consensus" | "report";
 
 export interface PatientProfile {
   age: number | null;
@@ -15,6 +16,7 @@ export interface PathologyPrediction {
   name: string;
   score: number;
   severity: "mild" | "moderate" | "severe";
+  review_flag?: "positive" | "borderline" | "uncertain" | "clear";
   uncertainty?: number;
   agreement?: number;
   ci_low?: number | null;
@@ -43,6 +45,8 @@ export interface HeatmapData {
 export interface AnatomyData {
   ctr: number | null;
   ctr_status: string;
+  ctr_cutoff?: number | null;
+  projection_view?: string | null;
   ctr_coords?: {
     thorax_x1: number;
     thorax_x2: number;
@@ -116,6 +120,7 @@ export interface PredictionResponse {
   dicom_metadata?: Record<string, string | number> | null;
   report: ReportData;
   patient?: PatientProfile | null;
+  cache_hit?: boolean;
   inference_time_ms: number;
   vision_latency_ms?: number | null;
 }
@@ -303,6 +308,17 @@ export interface EvaluationReport {
       support: number;
     }>;
   };
+  operating_profiles?: Record<
+    string,
+    {
+      threshold: number;
+      accuracy: number;
+      sensitivity: number;
+      specificity: number;
+      precision: number;
+      f1_score: number;
+    }
+  >;
   backbone_comparison?: Record<string, BackboneEvalMetrics>;
   latency_sla?: {
     avg_vision_ms: number;

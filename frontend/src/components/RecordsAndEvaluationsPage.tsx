@@ -1035,8 +1035,11 @@ export const RecordsAndEvaluationsPage: React.FC<RecordsAndEvaluationsPageProps>
                           val: `${Math.round(evaluations?.latency_sla?.avg_decision_1_ms ?? 0)} ms`,
                         },
                         {
-                          label: "Benchmark Cases",
-                          val: `${evaluations?.ai_verification?.total_cases ?? 6}`,
+                          label: "Avg Report Speed",
+                          val:
+                            (evaluations?.latency_sla?.avg_report_synthesis_ms ?? 0) >= 1000
+                              ? `${((evaluations?.latency_sla?.avg_report_synthesis_ms ?? 0) / 1000).toFixed(1)} s`
+                              : `${Math.round(evaluations?.latency_sla?.avg_report_synthesis_ms ?? 0)} ms`,
                         },
                       ].map((item) => (
                         <div

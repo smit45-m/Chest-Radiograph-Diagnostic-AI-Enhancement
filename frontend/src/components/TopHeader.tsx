@@ -2,7 +2,13 @@ import React from "react";
 import { motion } from "framer-motion";
 import { HeartPulse, Moon, Search, Sparkles, Sun, Upload } from "lucide-react";
 import { NAV_PAGES, formatPathology, type PageId } from "../data/clinicalCatalog";
-import type { AIConfigStatus, HealthStatus, PredictionResponse, ThemeMode } from "../types/clinical";
+import type {
+  AIConfigStatus,
+  AnalysisStage,
+  HealthStatus,
+  PredictionResponse,
+  ThemeMode,
+} from "../types/clinical";
 
 interface TopHeaderProps {
   activePage: PageId;
@@ -16,11 +22,19 @@ interface TopHeaderProps {
   predictionData: PredictionResponse | null;
   threshold: number;
   isAnalyzing: boolean;
+  analysisStage?: AnalysisStage;
   onSelectPage: (page: PageId) => void;
   onOpenCommand: () => void;
   onOpenGemini: () => void;
   onUploadClick: () => void;
 }
+
+const STAGE_LABELS: Record<AnalysisStage, string> = {
+  idle: "Ready",
+  vision: "Scanning X-ray...",
+  consensus: "Gemini Consensus...",
+  report: "Drafting ACR Report...",
+};
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
   activePage,
@@ -34,6 +48,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   predictionData,
   threshold,
   isAnalyzing,
+  analysisStage = "idle",
   onSelectPage,
   onOpenCommand,
   onOpenGemini,
@@ -93,7 +108,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 className="h-1.5 w-1.5 rounded-full clinical-led"
                 style={{ backgroundColor: "var(--accent-clinical)" }}
               />
-              Analyzing...
+              {STAGE_LABELS[analysisStage] || "Analyzing..."}
             </span>
           )}
         </div>

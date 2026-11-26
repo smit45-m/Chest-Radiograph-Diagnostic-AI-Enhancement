@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, List
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from PIL import Image
 
 from api.schemas import (
@@ -125,6 +125,105 @@ def _map_report_schema(report_raw: dict[str, Any]) -> ReportData:
     )
 
 
+def _enrich_patient_from_dicom(
+    patient_dict: dict[str, Any] | None,
+    dicom_meta: dict[str, Any] | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Extract DICOM ViewPosition and fill missing patient age/sex automatically from DICOM headers."""
+    if not dicom_meta:
+        return patient_dict, None
+    out = dict(patient_dict) if patient_dict else {}
+    raw_age = str(dicom_meta.get("patient_age", "") or "").strip().upper()
+    if not out.get("age") and raw_age:
+        digits = "".join(ch for ch in raw_age if ch.isdigit())
+        if digits:
+            val = int(digits)
+            if 1 <= val <= 120:
+                out["age"] = val
+    raw_sex = str(dicom_meta.get("patient_sex", "") or "").strip().upper()
+    if (not out.get("sex") or out.get("sex") == "Unspecified") and raw_sex in ("M", "F"):
+        out["sex"] = "Male" if raw_sex == "M" else "Female"
+    view_pos = str(dicom_meta.get("view_position", "") or "").strip()
+    dicom_view = view_pos if view_pos and view_pos.lower() != "unknown" else None
+    return (out if out else None), dicom_view
+
+
+def _build_prediction_response(
+    result: dict[str, Any],
+    elapsed_ms: float,
+    dicom_meta: dict[str, Any] | None,
+    patient_dict: dict[str, Any] | None,
+    saved_study_id: str | None,
+    saved_user_id: str | None,
+) -> PredictionResponse:
+    vision_ms = float(result.get("vision_latency_ms", elapsed_ms))
+    predictions = [PathologyPrediction(**p) for p in result.get("predictions", [])]
+    heatmaps = [HeatmapData(**h) for h in result.get("heatmaps", [])]
+    report = _map_report_schema(result.get("report", {}))
+    anatomy_raw = result.get("anatomy")
+    anatomy = AnatomyData(**anatomy_raw) if isinstance(anatomy_raw, dict) and anatomy_raw else None
+    dec_raw = result.get("decision_summary")
+    decision_summary = DecisionSummary(**dec_raw) if isinstance(dec_raw, dict) and dec_raw else None
+    patient_profile_obj = PatientProfile(**patient_dict) if patient_dict else None
+    return PredictionResponse(
+        study_id=saved_study_id,
+        user_id=saved_user_id,
+        predictions=predictions,
+        heatmaps=heatmaps,
+        anatomy=anatomy,
+        decision_summary=decision_summary,
+        ensemble_info=result.get("ensemble_info", {}),
+        timings=result.get("timings", {}),
+        dicom_metadata=dicom_meta,
+        report=report,
+        patient=patient_profile_obj,
+        cache_hit=bool(result.get("cache_hit", False)),
+        inference_time_ms=elapsed_ms,
+        vision_latency_ms=vision_ms,
+    )
+
+
+async def _archive_study_if_requested(
+    user_id: str | None,
+    study_name: str | None,
+    filename: str | None,
+    sample_id: str | None,
+    result: dict[str, Any],
+    elapsed_ms: float,
+) -> tuple[str | None, str | None]:
+    if not user_id:
+        return None, None
+    try:
+        vision_ms = float(result.get("vision_latency_ms", elapsed_ms))
+        report = _map_report_schema(result.get("report", {}))
+        anatomy_raw = result.get("anatomy")
+        anatomy = AnatomyData(**anatomy_raw) if isinstance(anatomy_raw, dict) and anatomy_raw else None
+        dec_raw = result.get("decision_summary")
+        decision_summary = DecisionSummary(**dec_raw) if isinstance(dec_raw, dict) and dec_raw else None
+        predictions = [PathologyPrediction(**p) for p in result.get("predictions", [])]
+        saved = await asyncio.to_thread(
+            CLINICAL_DB.save_study,
+            user_id,
+            {
+                "study_name": study_name or (filename or "Chest Radiograph"),
+                "filename": filename or "",
+                "sample_id": sample_id,
+                "predictions": [p.model_dump() for p in predictions],
+                "anatomy": anatomy.model_dump() if anatomy else None,
+                "decision_summary": decision_summary.model_dump() if decision_summary else None,
+                "report": report.model_dump(),
+                "ensemble_info": result.get("ensemble_info", {}),
+                "timings": result.get("timings", {}),
+                "vision_latency_ms": vision_ms,
+                "total_latency_ms": elapsed_ms,
+            },
+        )
+        return saved.get("id"), saved.get("user_id")
+    except Exception as db_exc:
+        print(f"[db] Non-fatal study archive error: {db_exc}")
+        return None, user_id
+
+
 async def _run_pipeline(
     request: Request,
     image_bytes: bytes,
@@ -146,6 +245,7 @@ async def _run_pipeline(
         raise HTTPException(status_code=503, detail="Model pipeline not loaded")
 
     valid_bytes, dicom_meta = _normalize_and_validate_image_bytes(image_bytes)
+    patient_dict, dicom_view = _enrich_patient_from_dicom(patient_dict, dicom_meta)
 
     # Run inference in worker thread so FastAPI event loop stays fully non-blocking
     t_start = time.perf_counter()
@@ -163,6 +263,8 @@ async def _run_pipeline(
             kwargs["colormap"] = colormap
         if "run_segmentation" in sig.parameters:
             kwargs["run_segmentation"] = run_segmentation
+        if "dicom_view" in sig.parameters and dicom_view is not None:
+            kwargs["dicom_view"] = dicom_view
 
         result = await asyncio.to_thread(
             pipeline.predict, valid_bytes, threshold, tta, patient_dict, **kwargs
@@ -180,64 +282,17 @@ async def _run_pipeline(
 
     TELEMETRY_HUB.record_span(
         op="cxr.predict.pipeline",
-        description=f"Ensemble + Grad-CAM++ + Report (thr={threshold:.2f}, tta={tta}, vis={vision_ms:.1f}ms)",
+        description=f"Ensemble + Grad-CAM++ + Report (thr={threshold:.2f}, tta={tta}, vis={vision_ms:.1f}ms, cache={bool(result.get('cache_hit'))})",
         duration_ms=vision_ms,
         status="ok",
         tags={"threshold": threshold, "tta": tta, "vision_ms": vision_ms, "total_ms": elapsed_ms},
     )
 
-    predictions = [PathologyPrediction(**p) for p in result.get("predictions", [])]
-    heatmaps = [HeatmapData(**h) for h in result.get("heatmaps", [])]
-    report = _map_report_schema(result.get("report", {}))
-
-    anatomy_raw = result.get("anatomy")
-    anatomy = AnatomyData(**anatomy_raw) if isinstance(anatomy_raw, dict) and anatomy_raw else None
-
-    dec_raw = result.get("decision_summary")
-    decision_summary = DecisionSummary(**dec_raw) if isinstance(dec_raw, dict) and dec_raw else None
-
-    patient_profile_obj = PatientProfile(**patient_dict) if patient_dict else None
-
-    saved_study_id: str | None = None
-    saved_user_id: str | None = user_id
-    if user_id:
-        try:
-            saved = await asyncio.to_thread(
-                CLINICAL_DB.save_study,
-                user_id,
-                {
-                    "study_name": study_name or (filename or "Chest Radiograph"),
-                    "filename": filename or "",
-                    "sample_id": sample_id,
-                    "predictions": [p.model_dump() for p in predictions],
-                    "anatomy": anatomy.model_dump() if anatomy else None,
-                    "decision_summary": decision_summary.model_dump() if decision_summary else None,
-                    "report": report.model_dump(),
-                    "ensemble_info": result.get("ensemble_info", {}),
-                    "timings": result.get("timings", {}),
-                    "vision_latency_ms": vision_ms,
-                    "total_latency_ms": elapsed_ms,
-                },
-            )
-            saved_study_id = saved.get("id")
-            saved_user_id = saved.get("user_id")
-        except Exception as db_exc:
-            print(f"[db] Non-fatal study archive error: {db_exc}")
-
-    return PredictionResponse(
-        study_id=saved_study_id,
-        user_id=saved_user_id,
-        predictions=predictions,
-        heatmaps=heatmaps,
-        anatomy=anatomy,
-        decision_summary=decision_summary,
-        ensemble_info=result.get("ensemble_info", {}),
-        timings=result.get("timings", {}),
-        dicom_metadata=dicom_meta,
-        report=report,
-        patient=patient_profile_obj,
-        inference_time_ms=elapsed_ms,
-        vision_latency_ms=vision_ms,
+    saved_study_id, saved_user_id = await _archive_study_if_requested(
+        user_id, study_name, filename, sample_id, result, elapsed_ms
+    )
+    return _build_prediction_response(
+        result, elapsed_ms, dicom_meta, patient_dict, saved_study_id, saved_user_id
     )
 
 
@@ -303,6 +358,117 @@ async def predict(
     )
 
 
+@router.post("/predict/stream")
+async def predict_stream(
+    request: Request,
+    file: UploadFile = File(..., description="Chest X-ray image (JPEG/PNG/WEBP/DICOM)"),
+    threshold: float = Form(0.50),
+    tta: bool = Form(True),
+    use_gemini_decision: bool = Form(True),
+    use_llm: bool = Form(True),
+    colormap: str = Form("turbo"),
+    run_segmentation: bool = Form(True),
+    user_id: str | None = Form(None),
+    study_name: str | None = Form(None),
+    sample_id: str | None = Form(None),
+    patient_context: str | None = Form(None),
+) -> StreamingResponse:
+    """Progressive NDJSON streaming endpoint (`vision` ~350ms -> `consensus` ~1.2s -> `complete`)."""
+    pipeline = getattr(request.app.state, "pipeline", None)
+    if pipeline is None:
+        raise HTTPException(status_code=503, detail="Model pipeline not loaded")
+
+    image_bytes = await file.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+    valid_bytes, dicom_meta = _normalize_and_validate_image_bytes(image_bytes)
+    patient_dict: dict[str, Any] = {}
+    if patient_context:
+        try:
+            patient_dict = json.loads(patient_context)
+        except Exception:
+            pass
+    patient_dict, dicom_view = _enrich_patient_from_dicom(patient_dict if patient_dict else None, dicom_meta)
+    filename = file.filename
+
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+
+    def _worker() -> None:
+        t_start = time.perf_counter()
+        try:
+            if hasattr(pipeline, "predict_stream") and callable(pipeline.predict_stream):
+                for evt in pipeline.predict_stream(
+                    image_input=valid_bytes,
+                    threshold=threshold,
+                    tta=tta,
+                    patient=patient_dict,
+                    use_gemini_decision=use_gemini_decision,
+                    use_llm=use_llm,
+                    colormap=colormap,
+                    run_segmentation=run_segmentation,
+                    dicom_view=dicom_view,
+                ):
+                    loop.call_soon_threadsafe(queue.put_nowait, ("event", evt))
+            else:
+                res = pipeline.predict(valid_bytes, threshold, tta, patient_dict)
+                res.setdefault("inference_time_ms", round((time.perf_counter() - t_start) * 1000, 2))
+                loop.call_soon_threadsafe(queue.put_nowait, ("event", {"event": "complete", "data": res}))
+        except Exception as exc:
+            loop.call_soon_threadsafe(queue.put_nowait, ("error", str(exc)))
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, ("done", None))
+
+    worker_task = asyncio.create_task(asyncio.to_thread(_worker))
+
+    async def _ndjson_gen():
+        try:
+            while True:
+                kind, payload = await queue.get()
+                if kind == "done":
+                    break
+                if kind == "error":
+                    yield json.dumps({"event": "error", "detail": payload}) + "\n"
+                    break
+                evt_name = payload.get("event")
+                evt_data = payload.get("data", {})
+                if evt_name == "complete":
+                    elapsed_ms = float(evt_data.get("inference_time_ms", 0.0))
+                    vision_ms = float(evt_data.get("vision_latency_ms", elapsed_ms))
+                    TELEMETRY_HUB.record_span(
+                        op="cxr.predict.stream",
+                        description=f"Streaming Ensemble (thr={threshold:.2f}, vis={vision_ms:.1f}ms, cache={bool(evt_data.get('cache_hit'))})",
+                        duration_ms=vision_ms,
+                        status="ok",
+                        tags={"threshold": threshold, "vision_ms": vision_ms, "total_ms": elapsed_ms},
+                    )
+                    saved_study_id, saved_user_id = await _archive_study_if_requested(
+                        user_id, study_name, filename, sample_id, evt_data, elapsed_ms
+                    )
+                    resp_obj = _build_prediction_response(
+                        evt_data, elapsed_ms, dicom_meta, patient_dict, saved_study_id, saved_user_id
+                    )
+                    yield json.dumps({"event": "complete", "data": resp_obj.model_dump()}) + "\n"
+                else:
+                    if dicom_meta:
+                        evt_data["dicom_metadata"] = dicom_meta
+                    if patient_dict:
+                        evt_data["patient"] = patient_dict
+                    yield json.dumps({"event": evt_name, "data": evt_data}, default=str) + "\n"
+        finally:
+            await worker_task
+
+    return StreamingResponse(
+        _ndjson_gen(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post("/predict/batch", response_model=BatchPredictionResponse)
 async def predict_batch(
     request: Request,
@@ -317,6 +483,18 @@ async def predict_batch(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided for batch triage")
 
+    import inspect
+
+    sig = inspect.signature(pipeline.predict)
+    batch_kwargs: dict[str, Any] = {
+        "use_gemini_decision": False,
+        "use_llm": False,
+        "run_segmentation": True,
+    }
+    if "generate_heatmaps" in sig.parameters:
+        # Batch STAT triage never renders individual heatmaps — skipping cuts batch latency by ~2.5x!
+        batch_kwargs["generate_heatmaps"] = False
+
     t0 = time.perf_counter()
     items: list[BatchStudyItem] = []
 
@@ -324,16 +502,18 @@ async def predict_batch(
         raw = await f.read()
         fname = f.filename or "radiograph.png"
         try:
-            valid_bytes, _ = _normalize_and_validate_image_bytes(raw)
+            valid_bytes, dicom_meta = _normalize_and_validate_image_bytes(raw)
+            _, dicom_view = _enrich_patient_from_dicom(None, dicom_meta)
+            call_kw = dict(batch_kwargs)
+            if "dicom_view" in sig.parameters and dicom_view is not None:
+                call_kw["dicom_view"] = dicom_view
             res = await asyncio.to_thread(
                 pipeline.predict,
                 valid_bytes,
                 threshold,
                 tta,
                 None,
-                use_gemini_decision=False,
-                use_llm=False,
-                run_segmentation=True,
+                **call_kw,
             )
             preds = [PathologyPrediction(**p) for p in res.get("predictions", [])]
             pos = [p for p in preds if p.score >= threshold]

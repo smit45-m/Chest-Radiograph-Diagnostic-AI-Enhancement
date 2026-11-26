@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T10:48:21Z",
+  "generated_at": "2026-11-26T20:15:58Z",
   "device": "cuda",
   "gpu_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
   "threshold": 0.5,
@@ -11,12 +11,12 @@
     "specificity": 0.9733,
     "precision": 0.75,
     "f1_score": 0.7059,
-    "micro_roc_auc": 0.9067,
-    "macro_roc_auc": 0.875,
-    "micro_pr_auc": 0.6385,
-    "macro_pr_auc": 0.7812,
-    "brier_score": 0.0685,
-    "ece": 0.111,
+    "micro_roc_auc": 0.9096,
+    "macro_roc_auc": 0.9,
+    "micro_pr_auc": 0.6762,
+    "macro_pr_auc": 0.8438,
+    "brier_score": 0.0674,
+    "ece": 0.105,
     "confusion": {
       "tp": 6,
       "tn": 73,
@@ -59,8 +59,8 @@
       },
       {
         "pathology": "Nodule",
-        "roc_auc": 0.8,
-        "pr_auc": 0.5,
+        "roc_auc": 1.0,
+        "pr_auc": 1.0,
         "sensitivity": 1.0,
         "specificity": 0.8,
         "support": 1
@@ -90,6 +90,32 @@
         "support": 1
       }
     ]
+  },
+  "operating_profiles": {
+    "screening_35": {
+      "threshold": 0.35,
+      "accuracy": 0.9286,
+      "sensitivity": 0.6667,
+      "specificity": 0.96,
+      "precision": 0.6667,
+      "f1_score": 0.6667
+    },
+    "balanced_50": {
+      "threshold": 0.5,
+      "accuracy": 0.9405,
+      "sensitivity": 0.6667,
+      "specificity": 0.9733,
+      "precision": 0.75,
+      "f1_score": 0.7059
+    },
+    "high_precision_62": {
+      "threshold": 0.62,
+      "accuracy": 0.9286,
+      "sensitivity": 0.4444,
+      "specificity": 0.9867,
+      "precision": 0.8,
+      "f1_score": 0.5714
+    }
   },
   "backbone_comparison": {
     "densenet121_all": {
@@ -153,36 +179,36 @@
       "ece": 0.0964
     },
     "gemini_decision_1": {
-      "accuracy": 0.8452,
-      "micro_roc_auc": 0.7874,
-      "macro_roc_auc": 0.8344,
-      "micro_pr_auc": 0.3525,
+      "accuracy": 0.8571,
+      "micro_roc_auc": 0.8163,
+      "macro_roc_auc": 0.875,
+      "micro_pr_auc": 0.3667,
       "sensitivity": 0.5556,
-      "specificity": 0.88,
-      "precision": 0.3571,
-      "f1_score": 0.4348,
-      "brier_score": 0.1321,
-      "ece": 0.2144
+      "specificity": 0.8933,
+      "precision": 0.3846,
+      "f1_score": 0.4545,
+      "brier_score": 0.1281,
+      "ece": 0.2131
     },
     "fused_consensus": {
       "accuracy": 0.9405,
-      "micro_roc_auc": 0.9067,
-      "macro_roc_auc": 0.875,
-      "micro_pr_auc": 0.6385,
+      "micro_roc_auc": 0.9096,
+      "macro_roc_auc": 0.9,
+      "micro_pr_auc": 0.6762,
       "sensitivity": 0.6667,
       "specificity": 0.9733,
       "precision": 0.75,
       "f1_score": 0.7059,
-      "brier_score": 0.0685,
-      "ece": 0.111
+      "brier_score": 0.0674,
+      "ece": 0.105
     }
   },
   "latency_sla": {
-    "avg_vision_ms": 877.6,
-    "avg_gradcam_ms": 377.5,
-    "avg_core_gpu_ms": 1255.1,
-    "avg_decision_1_ms": 1886.9,
-    "avg_report_synthesis_ms": 34541.4
+    "avg_vision_ms": 740.7,
+    "avg_gradcam_ms": 151.2,
+    "avg_core_gpu_ms": 891.9,
+    "avg_decision_1_ms": 926.0,
+    "avg_report_synthesis_ms": 8147.4
   },
   "ai_verification": {
     "gemini_decision_active_cases": 6,
@@ -233,18 +259,18 @@
       "decision_1_triage": "SEMI_URGENT",
       "decision_1_view": "PA_UPRIGHT",
       "decision_1_quality": 2.84,
-      "report_source": "groq:openai/gpt-oss-20b",
-      "triage_level": "URGENT",
-      "impression": "1. Moderate cardiomegaly with borderline cardiothoracic ratio, likely due to chronic HFrEF and volume overload.\n2. Normal pulmonary parenchyma and pleural spaces.\n3. No acute osseous injury or soft\u2011tissue abnormality.",
-      "dictation_transcript": "The frontal chest radiograph shows a borderline cardiothoracic ratio of 0.529 with moderate cardiomegaly, consistent with the patient\u2019s known HFrEF and clinical volume overload. Lung fields are clear with no effusion or consolidation. The osseous structures are intact. Immediate assessment of volume status, repeat BNP, and a 2\u2011D echocardiogram are warranted to guide diuretic titration and guideline\u2011directed medical therapy.",
-      "recommendations": "1. Obtain 2\u2011D echocardiogram and serum BNP per ACC/AHA HF guidelines.\n2. Initiate or titrate loop diuretic (Furosemide 20\u201340 mg PO or IV) to achieve dry weight.\n3. Start or optimize GDMT: ARNI, beta\u2011blocker, MRA, SGLT2i.\n4. Monitor electrolytes and renal function; avoid NSAIDs.",
+      "report_source": "gemini:gemini-3.5-flash-lite",
+      "triage_level": "SEMI_URGENT",
+      "impression": "1. Cardiomegaly with a cardiothoracic ratio of 0.53, consistent with the patient's known history of heart failure with reduced ejection fraction. 2. Clear lungs without overt signs of acute alveolar pulmonary edema or pleural effusion at this time.",
+      "dictation_transcript": "In this 68-year-old female admitted for progressive dyspnea and orthopnea in the setting of HFrEF, the frontal chest radiograph demonstrates borderline cardiomegaly with a cardiothoracic ratio of 0.53 and left heart prominence. The lung parenchyma remains clear without overt alveolar edema or pleural effusions. Clinical correlation with volume status and cardiac biomarkers is advised.",
+      "recommendations": "1. Assess volume status, serum NT-proBNP, and cardiac enzymes per ACC/AHA guidelines. 2. Correlate with recent 2D echocardiography to evaluate ventricular function and ejection fraction.",
       "timings": {
-        "vision_ms": 884.47,
-        "gradcam_ms": 464.97,
-        "core_total_ms": 1349.44,
-        "decision_api_ms": 4633.93,
-        "report_ms": 62389.39,
-        "total_ms": 67578.64
+        "vision_ms": 173.7,
+        "gradcam_ms": 40.66,
+        "core_total_ms": 214.36,
+        "decision_api_ms": 1367.73,
+        "report_ms": 13527.16,
+        "total_ms": 14925.46
       }
     },
     {
@@ -284,7 +310,7 @@
       ],
       "match": "EXACT_MATCH",
       "ctr": 0.559,
-      "ctr_status": "Enlarged (>0.53 \u2014 Cardiomegaly range)",
+      "ctr_status": "Enlarged (>=0.53 \u2014 Cardiomegaly range)",
       "lung_symmetry_ratio": 0.988,
       "gradcam_zone": "Left Lung \u2014 Mid Zone",
       "decision_1_active": true,
@@ -293,16 +319,16 @@
       "decision_1_quality": 2.87,
       "report_source": "gemini:gemini-3.5-flash-lite",
       "triage_level": "URGENT",
-      "impression": "1. Left mid-zone pulmonary nodule (71.6% confidence) and mass (62.6% confidence), highly concerning for primary neoplastic etiology in this actively smoking patient with unintentional weight loss and hemoptysis.\n2. Bilateral interstitial infiltrates (57.9% confidence), representing either atypical infectious process, inflammatory changes, or secondary lymphangitic spread.\n3. Borderline cardiomegaly with a quantitative cardiothoracic ratio of 0.559.",
-      "dictation_transcript": "This is a 64-year-old male heavy smoker presenting with constitutional symptoms and hemoptysis, evaluated via frontal chest radiograph and deep learning multi-backbone models. Automated analysis reveals a prominent left mid-zone pulmonary nodule and mass along with infiltrative changes, supported by a measured cardiothoracic ratio of 0.559. Given the clinical profile and imaging findings, urgent contrast-enhanced chest CT is mandated for tissue characterization and oncologic staging.",
-      "recommendations": "1. Perform a dedicated contrast-enhanced thin-slice chest CT per Fleischner Society guidelines for detailed nodule and mass characterization.\n2. Urgent outpatient pulmonology consultation for consideration of bronchoscopy or image-guided transthoracic needle biopsy.\n3. Sputum cytology and complete laboratory workup including inflammatory markers and infectious serologies.",
+      "impression": "1. Left mid-zone pulmonary nodule (71.6%) and mass-like opacity (62.6%) in a heavy smoker with hemoptysis and weight loss, highly suspicious for primary bronchogenic carcinoma.\n2. Bilateral pulmonary infiltrates (57.9%), indeterminate for active infection versus inflammatory or neoplastic lymphangitic spread.\n3. Cardiomegaly with a CTR of 0.559.",
+      "dictation_transcript": "This is a 64-year-old male with a significant smoking history presenting with weight loss and hemoptysis. Frontal chest radiograph demonstrates a left mid-zone pulmonary nodule and mass, accompanied by bilateral interstitial infiltrates and a cardiothoracic ratio of 0.559. Given the high clinical suspicion for malignancy in the setting of hemoptysis and weight loss, an immediate contrast-enhanced chest CT is recommended.",
+      "recommendations": "1. Perform a dedicated contrast-enhanced thin-slice chest CT per Fleischner Society guidelines for accurate nodule and mass risk stratification.\n2. Pulmonology and oncology consultation for possible diagnostic bronchoscopy or image-guided transthoracic needle biopsy.\n3. Sputum cytology and infectious workup including sputum cultures and AFB smears.",
       "timings": {
-        "vision_ms": 575.99,
-        "gradcam_ms": 662.17,
-        "core_total_ms": 1238.16,
-        "decision_api_ms": 1117.46,
-        "report_ms": 6140.62,
-        "total_ms": 8000.89
+        "vision_ms": 447.36,
+        "gradcam_ms": 234.37,
+        "core_total_ms": 681.73,
+        "decision_api_ms": 971.94,
+        "report_ms": 7285.82,
+        "total_ms": 8319.67
       }
     },
     {
@@ -320,23 +346,23 @@
       "top_predictions": [
         {
           "name": "Nodule",
-          "score": 0.7372,
-          "gemini_decision_score": 0.9595
+          "score": 0.6994,
+          "gemini_decision_score": 0.9265
         },
         {
           "name": "Mass",
-          "score": 0.5161,
-          "gemini_decision_score": 0.1822
+          "score": 0.5474,
+          "gemini_decision_score": 0.2451
         },
         {
           "name": "Infiltration",
-          "score": 0.3434,
-          "gemini_decision_score": 0.5264
+          "score": 0.3341,
+          "gemini_decision_score": 0.4724
         },
         {
           "name": "Pleural_Thickening",
-          "score": 0.1678,
-          "gemini_decision_score": 0.63
+          "score": 0.1615,
+          "gemini_decision_score": 0.5621
         }
       ],
       "match": "PARTIAL_MATCH",
@@ -347,19 +373,19 @@
       "decision_1_active": true,
       "decision_1_triage": "URGENT",
       "decision_1_view": "PA_UPRIGHT",
-      "decision_1_quality": 3.33,
-      "report_source": "gemini:gemini-3.1-flash-lite",
+      "decision_1_quality": 3.49,
+      "report_source": "gemini:gemini-3.5-flash-lite",
       "triage_level": "URGENT",
-      "impression": "1. Left mid-lung pulmonary nodule/mass (approx. 2 cm). Given the patient's symptoms of evening fevers and subacute discomfort, clinical correlation for potential infectious process or neoplasm is essential. 2. Recommend immediate further characterization with thin-slice chest CT with contrast.",
-      "dictation_transcript": "This is a 58-year-old female presenting to the ED with subacute chest symptoms and constitutional fevers. Frontal chest radiograph reveals a focal, indeterminate soft-tissue opacity in the left mid-lung zone. The cardiomediastinal silhouette is normal, and there is no pleural disease or acute osseous abnormality. Given the presence of constitutional symptoms and this identified thoracic lesion, a dedicated contrast-enhanced thin-slice chest CT is mandated for accurate staging and tissue characterization.",
-      "recommendations": "1. Urgent contrast-enhanced diagnostic CT of the chest (Fleischner Society 2017 standards for nodule characterization). 2. Correlation with laboratory markers (CBC with differential, inflammatory markers) and previous imaging if available.",
+      "impression": "1. Left mid lung zone pulmonary nodule/mass (69.9% probability). Indeterminate etiology requiring further cross-sectional imaging correlation.\n2. No acute cardiopulmonary decompensation or pleural effusion.",
+      "dictation_transcript": "This is a frontal chest radiograph for a 58-year-old female presenting with subacute chest discomfort and fevers. Deep learning models and Grad-CAM localization highlight a focal pulmonary nodule in the left mid lung zone with a confidence score of nearly seventy percent. The cardiothoracic ratio is normal at 0.38, and pleural spaces are clear. Given the localized opacity, urgent contrast-enhanced chest CT is recommended to rule out primary neoplasm or inflammatory etiology.",
+      "recommendations": "1. Perform a dedicated contrast-enhanced thin-slice chest CT for nodule characterization per Fleischner Society 2017 guidelines.\n2. Correlate with inflammatory markers and clinical symptom progression.",
       "timings": {
-        "vision_ms": 916.92,
-        "gradcam_ms": 424.57,
-        "core_total_ms": 1341.49,
-        "decision_api_ms": 1261.32,
-        "report_ms": 36910.03,
-        "total_ms": 38621.91
+        "vision_ms": 567.12,
+        "gradcam_ms": 163.91,
+        "core_total_ms": 731.03,
+        "decision_api_ms": 830.72,
+        "report_ms": 6125.7,
+        "total_ms": 6976.63
       }
     },
     {
@@ -397,25 +423,25 @@
       ],
       "match": "PARTIAL_MATCH",
       "ctr": 0.536,
-      "ctr_status": "Enlarged (>0.53 \u2014 Cardiomegaly range)",
+      "ctr_status": "Normal for AP Portable (<0.55; AP magnification adjusted)",
       "lung_symmetry_ratio": 0.673,
-      "gradcam_zone": "Cardiomediastinal Silhouette",
+      "gradcam_zone": "Right Lung \u2014 Mid Zone",
       "decision_1_active": true,
       "decision_1_triage": "SEMI_URGENT",
       "decision_1_view": "AP_PORTABLE",
       "decision_1_quality": 2.41,
       "report_source": "gemini:gemini-3.5-flash-lite",
       "triage_level": "SEMI_URGENT",
-      "impression": "1. Subsegmental atelectasis at the right lung base, secondary to post-operative shallow inspiration and volume loss.\n2. Borderline cardiomegaly with a quantitative CTR of 0.536, correlating with history of hypertension.\n3. Background interstitial changes consistent with known interstitial lung disease.",
-      "dictation_transcript": "On the portable frontal chest radiograph of this 71-year-old post-operative male, there is evidence of right basilar subsegmental atelectasis with an associated model probability of 63.7%. The quantitative cardiothoracic ratio is elevated at 0.536, indicating mild cardiomegaly in the context of chronic hypertension. Costophrenic sulci remain clear without pleural effusion or pneumothorax. Clinical correlation with oxygen saturation trends and aggressive incentive spirometry is recommended.",
-      "recommendations": "1. Encourage aggressive incentive spirometry, early ambulation, and deep breathing exercises per ATS guidelines to reverse atelectasis and improve SpO2.\n2. Serial clinical monitoring of oxygen saturation and vital signs.\n3. Follow-up chest radiograph if clinical status deteriorates or fails to improve.",
+      "impression": "1. Mild right mid zone subsegmental atelectasis related to post-operative shallow breathing and underlying interstitial lung disease. 2. No acute focal consolidation, overt pulmonary edema, or pleural effusion.",
+      "dictation_transcript": "This is an AP portable chest radiograph for a 71-year-old male post-operative on the medical ward with mild hypoxemia. We observe mild subsegmental atelectasis in the right mid lung zone, supported by an automated probability score of 63.7 percent and Grad-CAM localization. The cardiothoracic ratio is 0.536, which is normal for an AP portable view. No acute airspace disease or pleural effusion is seen, and recommendations include aggressive incentive spirometry and pulmonary hygiene.",
+      "recommendations": "1. Initiate aggressive incentive spirometry, deep breathing exercises, and early ambulation per post-operative pulmonary care guidelines (ATS/ACCP). 2. Serial clinical monitoring of oxygen saturation and respiratory status. 3. Follow-up chest radiograph if clinical status deteriorates or fails to improve.",
       "timings": {
-        "vision_ms": 909.27,
-        "gradcam_ms": 224.12,
-        "core_total_ms": 1133.39,
-        "decision_api_ms": 1168.34,
-        "report_ms": 5918.2,
-        "total_ms": 7800.78
+        "vision_ms": 1097.97,
+        "gradcam_ms": 108.76,
+        "core_total_ms": 1206.73,
+        "decision_api_ms": 838.62,
+        "report_ms": 8396.77,
+        "total_ms": 9959.12
       }
     },
     {
@@ -455,23 +481,23 @@
       "ctr": 0.452,
       "ctr_status": "Normal (<0.50)",
       "lung_symmetry_ratio": 0.913,
-      "gradcam_zone": "Cardiomediastinal Silhouette",
+      "gradcam_zone": "Left Lung \u2014 Mid Zone",
       "decision_1_active": true,
       "decision_1_triage": "URGENT",
       "decision_1_view": "SUBOPTIMAL",
       "decision_1_quality": 2.14,
-      "report_source": "gemini:gemini-3.1-flash-lite",
+      "report_source": "gemini:gemini-3.5-flash-lite",
       "triage_level": "URGENT",
-      "impression": "1. Mild interstitial infiltration, suspicious for early stage community-acquired pneumonia. 2. No evidence of lobar consolidation, large pleural effusion, or acute congestive failure.",
-      "dictation_transcript": "Frontal chest radiograph of this 72-year-old male demonstrates mild interstitial infiltration in the left perihilar region, consistent with the patient's acute febrile presentation. The cardiothoracic ratio is normal at 0.452, and there is no evidence of pleural effusion or frank consolidation. Given the patient's age and clinical profile, these findings are highly suggestive of an evolving infectious process. Close clinical monitoring and prompt initiation of empiric antibiotic therapy are recommended.",
-      "recommendations": "1. Initiate empiric antibiotic therapy according to current ATS/IDSA guidelines for community-acquired pneumonia in adults with comorbidities. 2. Recommend repeat chest imaging in 4-6 weeks to ensure complete radiographic resolution of the infiltration per Fleischner Society principles. 3. Consider blood and sputum cultures prior to antibiotic administration.",
+      "impression": "1. Pulmonary infiltration / early bronchopneumonia in the left mid lung zone (53.1% confidence).\n2. Suboptimal projection chest radiograph with clinical correlation strongly recommended.",
+      "dictation_transcript": "This is a 72-year-old male presenting to the emergency department with high fever and productive cough. Frontal chest radiograph demonstrates subtle pulmonary infiltration localized to the left mid lung zone with a normal cardiothoracic ratio of 0.452. Given the clinical presentation of high fever and comorbidities, urgent initiation of guideline-directed antimicrobial therapy and close monitoring are warranted.",
+      "recommendations": "1. Initiate guideline-directed antimicrobial therapy per ATS/IDSA recommendations immediately.\n2. Recommend interval follow-up chest radiograph in 4 to 6 weeks to document complete radiographic resolution.\n3. Monitor vital signs and oxygen saturation continuously in the Emergency Department.",
       "timings": {
-        "vision_ms": 1385.18,
-        "gradcam_ms": 226.05,
-        "core_total_ms": 1611.23,
-        "decision_api_ms": 1328.64,
-        "report_ms": 37562.92,
-        "total_ms": 39821.66
+        "vision_ms": 1185.5,
+        "gradcam_ms": 248.03,
+        "core_total_ms": 1433.53,
+        "decision_api_ms": 816.48,
+        "report_ms": 7314.09,
+        "total_ms": 9182.21
       }
     },
     {
@@ -506,23 +532,23 @@
       "ctr": null,
       "ctr_status": "Unavailable",
       "lung_symmetry_ratio": 0.0,
-      "gradcam_zone": "Cardiomediastinal Silhouette",
+      "gradcam_zone": "Left Lung \u2014 Mid Zone",
       "decision_1_active": true,
       "decision_1_triage": "ROUTINE",
       "decision_1_view": "SUBOPTIMAL",
       "decision_1_quality": 1.17,
-      "report_source": "gemini:gemini-3.1-flash-lite",
+      "report_source": "gemini:gemini-3.5-flash-lite",
       "triage_level": "ROUTINE",
-      "impression": "1. No acute cardiopulmonary abnormality detected on this frontal chest radiograph.",
-      "dictation_transcript": "This 45-year-old female presents for routine preoperative assessment. The frontal chest radiograph is unremarkable, demonstrating clear lung fields without evidence of focal consolidation, effusion, or pneumothorax. The cardiomediastinal silhouette is normal in size and configuration. The examination is negative for acute cardiopulmonary disease.",
-      "recommendations": "1. Per ACC/AHA preoperative guidelines, no further routine imaging is indicated for this patient based on current clinical findings.",
+      "impression": "1. Normal chest radiograph with no acute cardiopulmonary disease. 2. Fully cleared for preoperative assessment.",
+      "dictation_transcript": "This is a 45-year-old female presenting for routine preoperative cardiopulmonary clearance. The frontal chest radiograph demonstrates clear lung fields bilaterally with no focal consolidation or acute infiltrates. The cardiomediastinal contours are normal and pleural spaces are clear. There is no acute thoracic abnormality detected.",
+      "recommendations": "1. Routine clinical follow-up as clinically indicated per ACC/AHA preoperative guidelines. 2. No urgent thoracic imaging or additional diagnostic workup required.",
       "timings": {
-        "vision_ms": 593.5,
-        "gradcam_ms": 263.25,
-        "core_total_ms": 856.75,
-        "decision_api_ms": 1811.68,
-        "report_ms": 58327.51,
-        "total_ms": 60433.8
+        "vision_ms": 972.45,
+        "gradcam_ms": 111.33,
+        "core_total_ms": 1083.78,
+        "decision_api_ms": 730.73,
+        "report_ms": 6234.71,
+        "total_ms": 7340.7
       }
     }
   ]

@@ -29,6 +29,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -39,14 +40,58 @@ from pydantic import BaseModel, Field
 from cxr.constants import PATHOLOGIES
 
 
-# Current non-deprecated Gemini models per official Gemini API docs
+# Current verified low-latency Gemini models (ordered fastest -> deepest; avoids stale 404/503 fallthrough)
 CURRENT_GEMINI_MODELS: list[str] = [
     "gemini-3.5-flash-lite",
-    "gemini-3.8-flash",
-    "gemini-3.6-flash",
     "gemini-3.1-flash-lite",
     "gemini-4-hydrogen",
 ]
+
+# Thread-safe persistent HTTP keep-alive connection pool & adaptive model circuit breaker
+_HTTP_POOL_LOCK = threading.Lock()
+_SHARED_HTTP_CLIENT: httpx.Client | None = None
+_MODEL_COOLDOWN_UNTIL: dict[str, float] = {}
+
+
+def _get_shared_http_client() -> httpx.Client:
+    """Return a shared keep-alive httpx.Client so TLS/TCP handshakes are reused across API calls."""
+    global _SHARED_HTTP_CLIENT
+    if _SHARED_HTTP_CLIENT is None or _SHARED_HTTP_CLIENT.is_closed:
+        with _HTTP_POOL_LOCK:
+            if _SHARED_HTTP_CLIENT is None or _SHARED_HTTP_CLIENT.is_closed:
+                _SHARED_HTTP_CLIENT = httpx.Client(
+                    timeout=httpx.Timeout(11.0, connect=4.5),
+                    limits=httpx.Limits(
+                        max_connections=24,
+                        max_keepalive_connections=12,
+                        keepalive_expiry=120.0,
+                    ),
+                )
+    return _SHARED_HTTP_CLIENT
+
+
+def _is_model_healthy(model_id: str) -> bool:
+    until = _MODEL_COOLDOWN_UNTIL.get(model_id, 0.0)
+    return time.monotonic() >= until
+
+
+def _mark_model_unhealthy(model_id: str, status_code: int | None = None) -> None:
+    """Temporarily bench dead (404/400) or overloaded (429/503/timeout) models to prevent 20s+ stalls."""
+    cooldown = 600.0 if status_code in (400, 404) else 120.0
+    _MODEL_COOLDOWN_UNTIL[model_id] = time.monotonic() + cooldown
+
+
+def _mark_model_healthy(model_id: str) -> None:
+    _MODEL_COOLDOWN_UNTIL.pop(model_id, None)
+
+
+def get_circuit_breaker_status() -> dict[str, float]:
+    now = time.monotonic()
+    return {
+        m: round(until - now, 1)
+        for m, until in _MODEL_COOLDOWN_UNTIL.items()
+        if until > now
+    }
 
 # Radiologist-grade differential criteria with explicit specificity & size/projection definitions
 PATHOLOGY_DECISION_CRITERIA: dict[str, str] = {
@@ -310,64 +355,46 @@ class GeminiDecision1Client:
         multimodal_input = self.build_multimodal_input(image_bytes, mime_type=mime_type, patient=patient)
 
         raw_answers: dict[str, Any] | None = None
-        transport = "rest"
+        transport = "rest-pooled"
 
-        # Path 1: Native google-genai SDK >= 3.2.0 (`client.decisions.create`)
+        # Fast Primary Path: Official `POST /v1beta/decisions` over persistent keep-alive pool
+        # (avoids per-request SDK client cold init & TLS handshake overhead)
+        payload = {
+            "model": self.model,
+            "input": multimodal_input,
+            "questions": questions,
+        }
         try:
-            from google import genai
-
-            client = genai.Client(
-                api_key=self.api_key,
-                http_options={"api_version": "v1beta"},
+            http_client = _get_shared_http_client()
+            resp = http_client.post(
+                self.DECISIONS_REST_URL,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": self.api_key,
+                },
+                json=payload,
+                timeout=httpx.Timeout(self.timeout, connect=4.5),
             )
-            if hasattr(client, "decisions"):
-                transport = "sdk"
-                sdk_res = client.decisions.create(
-                    model=self.model,
-                    input=multimodal_input,
-                    questions=questions,
-                )
-                raw_answers = self._normalize_sdk_answers(sdk_res)
-        except Exception:
-            raw_answers = None
-
-        # Path 2: Official `POST /v1beta/decisions` REST endpoint via httpx
-        if raw_answers is None:
-            payload = {
-                "model": self.model,
-                "input": multimodal_input,
-                "questions": questions,
-            }
-            try:
-                with httpx.Client(timeout=self.timeout) as http_client:
-                    resp = http_client.post(
-                        self.DECISIONS_REST_URL,
-                        headers={
-                            "Content-Type": "application/json",
-                            "x-goog-api-key": self.api_key,
-                        },
-                        json=payload,
-                    )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    raw_answers = data.get("answers", data.get("results", {}))
-                else:
-                    return {
-                        "active": False,
-                        "status": "api_error",
-                        "model": self.model,
-                        "http_status": resp.status_code,
-                        "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-                        "message": f"Gemini Decision 1 returned HTTP {resp.status_code}",
-                    }
-            except Exception as exc:
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_answers = data.get("answers", data.get("results", {}))
+            else:
                 return {
                     "active": False,
-                    "status": "error",
+                    "status": "api_error",
                     "model": self.model,
+                    "http_status": resp.status_code,
                     "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-                    "message": str(exc),
+                    "message": f"Gemini Decision 1 returned HTTP {resp.status_code}",
                 }
+        except Exception as exc:
+            return {
+                "active": False,
+                "status": "error",
+                "model": self.model,
+                "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                "message": str(exc),
+            }
 
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         return self._parse_decision_response(raw_answers or {}, latency_ms=latency_ms, transport=transport)
@@ -486,8 +513,9 @@ class GeminiFlashClinician:
         system_instruction: str,
         response_format: dict[str, Any] | None = None,
         previous_interaction_id: str | None = None,
+        timeout_sec: float = 11.5,
     ) -> tuple[str, str | None]:
-        """Execute an Interactions API call with strict connect/read timeouts (`POST /v1beta/interactions`)."""
+        """Execute an Interactions API call over persistent HTTP pool (`POST /v1beta/interactions`)."""
         body: dict[str, Any] = {
             "model": model,
             "input": input_payload,
@@ -498,43 +526,44 @@ class GeminiFlashClinician:
         if previous_interaction_id:
             body["previous_interaction_id"] = previous_interaction_id
 
-        with httpx.Client(timeout=httpx.Timeout(24.0, connect=8.0)) as http_client:
-            resp = http_client.post(
-                self.INTERACTIONS_REST_URL,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-goog-api-key": self.api_key,
-                    "Api-Revision": "2026-05-20",
-                },
-                json=body,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            out_text = data.get("output_text") or ""
-            if not out_text:
-                # Interactions API v1beta returns `outputs` list OR `steps` list depending on revision
-                for out_item in reversed(data.get("outputs", [])):
-                    if isinstance(out_item, dict):
-                        if out_item.get("type") == "text" and out_item.get("text"):
-                            out_text = out_item["text"]
-                            break
-                        parts = out_item.get("content") or []
-                        if isinstance(parts, list):
-                            joined = "".join(
-                                p.get("text", "") for p in parts if isinstance(p, dict) and p.get("type") == "text"
-                            )
-                            if joined:
-                                out_text = joined
-                                break
-            if not out_text:
-                for step in reversed(data.get("steps", [])):
-                    if step.get("type") == "model_output":
-                        out_text = "".join(
-                            p.get("text", "") for p in step.get("content", []) if p.get("type") == "text"
+        http_client = _get_shared_http_client()
+        resp = http_client.post(
+            self.INTERACTIONS_REST_URL,
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.api_key,
+                "Api-Revision": "2026-05-20",
+            },
+            json=body,
+            timeout=httpx.Timeout(timeout_sec, connect=4.5),
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        out_text = data.get("output_text") or ""
+        if not out_text:
+            # Interactions API v1beta returns `outputs` list OR `steps` list depending on revision
+            for out_item in reversed(data.get("outputs", [])):
+                if isinstance(out_item, dict):
+                    if out_item.get("type") == "text" and out_item.get("text"):
+                        out_text = out_item["text"]
+                        break
+                    parts = out_item.get("content") or []
+                    if isinstance(parts, list):
+                        joined = "".join(
+                            p.get("text", "") for p in parts if isinstance(p, dict) and p.get("type") == "text"
                         )
-                        if out_text:
+                        if joined:
+                            out_text = joined
                             break
-            return out_text.strip(), data.get("id")
+        if not out_text:
+            for step in reversed(data.get("steps", [])):
+                if step.get("type") == "model_output":
+                    out_text = "".join(
+                        p.get("text", "") for p in step.get("content", []) if p.get("type") == "text"
+                    )
+                    if out_text:
+                        break
+        return out_text.strip(), data.get("id")
 
     def synthesize_report(
         self,
@@ -603,7 +632,10 @@ class GeminiFlashClinician:
             "schema": ClinicalReportSchema.model_json_schema(),
         }
 
-        candidates = list(dict.fromkeys([self.model, *CURRENT_GEMINI_MODELS]))
+        all_candidates = list(dict.fromkeys([self.model, *CURRENT_GEMINI_MODELS]))
+        healthy = [m for m in all_candidates if _is_model_healthy(m)]
+        # Try at most 2 healthy Gemini candidates before falling through to sub-second Groq fallback
+        candidates = (healthy if healthy else all_candidates)[:2]
         for model_name in candidates:
             try:
                 raw_text, interaction_id = self._create_interaction(
@@ -611,10 +643,12 @@ class GeminiFlashClinician:
                     input_payload=input_blocks,
                     system_instruction=self.REPORT_SYSTEM_INSTRUCTION,
                     response_format=response_format,
+                    timeout_sec=11.0,
                 )
                 if not raw_text:
                     continue
                 validated = ClinicalReportSchema.model_validate_json(raw_text)
+                _mark_model_healthy(model_name)
                 compartments = validated.compartments.model_dump()
                 findings = (
                     f"LUNGS & AIRWAYS: {compartments['lungs']}\n"
@@ -654,7 +688,12 @@ class GeminiFlashClinician:
                     "interaction_id": interaction_id,
                     "synthesis_ms": round((time.perf_counter() - t0) * 1000, 2),
                 }
+            except httpx.HTTPStatusError as exc:
+                _mark_model_unhealthy(model_name, exc.response.status_code)
+                print(f"[gemini-interactions] {model_name} HTTP {exc.response.status_code}; benched briefly.")
+                continue
             except Exception as exc:
+                _mark_model_unhealthy(model_name)
                 print(f"[gemini-interactions] {model_name} failed: {exc}")
                 continue
         return None
@@ -677,29 +716,37 @@ class GeminiFlashClinician:
         ctx_blob = json.dumps(study_context, default=str)[:4000]
         user_msg = f"ACTIVE STUDY CONTEXT:\n{ctx_blob}\n\nCLINICIAN QUESTION:\n{question}"
 
-        # 1. Try Gemini Interactions API (with stateful previous_interaction_id if supplied)
+        # 1. Try Gemini Interactions API (with stateful previous_interaction_id + circuit breaker)
         if self.api_key:
             transcript = ""
             if history and not previous_interaction_id:
                 for turn in history[-6:]:
                     transcript += f"{turn.get('role', 'user').upper()}: {turn.get('content', '')}\n"
             prompt = f"{transcript}\n{user_msg}".strip()
-            for model_name in dict.fromkeys([self.model, *CURRENT_GEMINI_MODELS]):
+            all_chat = list(dict.fromkeys([self.model, *CURRENT_GEMINI_MODELS]))
+            healthy_chat = [m for m in all_chat if _is_model_healthy(m)]
+            for model_name in (healthy_chat if healthy_chat else all_chat)[:2]:
                 try:
                     ans_text, next_id = self._create_interaction(
                         model=model_name,
                         input_payload=prompt,
                         system_instruction=sys_prompt,
                         previous_interaction_id=previous_interaction_id,
+                        timeout_sec=10.0,
                     )
                     if ans_text:
+                        _mark_model_healthy(model_name)
                         return {
                             "answer": ans_text,
                             "provider": f"gemini:{model_name}",
                             "interaction_id": next_id,
                             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
                         }
+                except httpx.HTTPStatusError as exc:
+                    _mark_model_unhealthy(model_name, exc.response.status_code)
+                    continue
                 except Exception:
+                    _mark_model_unhealthy(model_name)
                     continue
 
         # 2. Try Groq Cloud fallback (live openai/gpt-oss-20b / 120b / qwen3.8-27b)

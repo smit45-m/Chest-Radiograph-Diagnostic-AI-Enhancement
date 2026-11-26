@@ -190,3 +190,88 @@ def test_v4_api_endpoints_batch_copilot_config_and_synthesize():
         )
         assert res_rep.status_code == 200
         assert "Cardiomegaly" in res_rep.json()["impression"]
+
+
+def test_v9_single_pass_gradcam_pathology_zone_and_streaming(model, sample_image_tensor):
+    """Verify v9.0 upgrades:
+    1. Single-pass multi-class Grad-CAM++ produces valid maps for multiple classes in 1 forward pass.
+    2. Pathology-aware anatomical zone prioritizes lung parenchyma for pulmonary diseases.
+    3. Projection-aware CTR interpretation adjusts cutoff for AP portable scans.
+    4. POST /api/v1/predict/stream returns valid NDJSON milestones ending in `complete`.
+    """
+    import json
+
+    from cxr.models.ensemble import ClinicalEnsemble
+
+    # 1. Single-pass multi-class Grad-CAM++
+    with GradCAMPlusPlus(model, model.cam_target_layer()) as cam_engine:
+        cams = cam_engine.generate_multi(sample_image_tensor, class_indices=[0, 1, 3], output_size=(64, 64))
+    assert set(cams.keys()) == {0, 1, 3}
+    for c in cams.values():
+        assert c.shape == (64, 64)
+        assert c.min() >= 0.0 and c.max() <= 1.0 + 1e-5
+
+    # 2. Pathology-aware anatomical zone (lung overlap wins for Infiltration even with mediastinal spillover)
+    cam = np.zeros((64, 64), dtype=np.float32)
+    cam[24:44, 16:40] = 0.9
+    seg_masks = {
+        "Right Lung": np.zeros((64, 64), dtype=bool),
+        "Left Lung": np.zeros((64, 64), dtype=bool),
+        "Heart": np.zeros((64, 64), dtype=bool),
+    }
+    seg_masks["Right Lung"][18:48, 12:30] = True
+    seg_masks["Heart"][28:46, 26:42] = True
+    lung_meta = extract_hotspot_metadata(cam, seg_masks=seg_masks, pathology="Infiltration")
+    cardiac_meta = extract_hotspot_metadata(cam, seg_masks=seg_masks, pathology="Cardiomegaly")
+    assert "Right Lung" in lung_meta["anatomical_zone"]
+    assert cardiac_meta["anatomical_zone"] == "Cardiomediastinal Silhouette"
+
+    # 3. Projection-aware CTR interpretation
+    pa_status, pa_cut = ClinicalEnsemble.interpret_ctr(0.54, "PA_UPRIGHT")
+    ap_status, ap_cut = ClinicalEnsemble.interpret_ctr(0.54, "AP_PORTABLE")
+    assert pa_cut == pytest.approx(0.53) and "Enlarged" in pa_status
+    assert ap_cut == pytest.approx(0.58) and "Normal for AP" in ap_status
+
+    # 4. NDJSON Streaming endpoint
+    img = Image.new("L", (224, 224), color=128)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    img_bytes = buf.getvalue()
+
+    mock_pipe = MagicMock()
+    mock_pipe.device = "cpu"
+    mock_pipe.predict_stream.return_value = iter([
+        {
+            "event": "vision",
+            "data": {
+                "predictions": [{"name": p, "score": 0.1, "severity": "mild", "review_flag": "clear"} for p in PATHOLOGIES],
+                "heatmaps": [],
+                "vision_latency_ms": 180.0,
+            },
+        },
+        {
+            "event": "complete",
+            "data": {
+                "predictions": [{"name": p, "score": 0.1, "severity": "mild", "review_flag": "clear"} for p in PATHOLOGIES],
+                "positives": [],
+                "heatmaps": [],
+                "anatomy": {"ctr": 0.45, "ctr_status": "Normal (<0.50)", "ctr_cutoff": 0.53, "projection_view": "PA_UPRIGHT"},
+                "report": {"findings": "Clear", "impression": "Normal", "draft": "Normal", "source": "template"},
+                "cache_hit": False,
+                "inference_time_ms": 210.0,
+                "vision_latency_ms": 180.0,
+            },
+        },
+    ])
+
+    with TestClient(app) as client:
+        app.state.pipeline = mock_pipe
+        res = client.post(
+            "/api/v1/predict/stream",
+            files={"file": ("xray.jpg", img_bytes, "image/jpeg")},
+            data={"threshold": "0.50"},
+        )
+        assert res.status_code == 200
+        events = [json.loads(line) for line in res.text.strip().splitlines() if line.strip()]
+        assert [e["event"] for e in events] == ["vision", "complete"]
+        assert events[-1]["data"]["anatomy"]["ctr_cutoff"] == pytest.approx(0.53)

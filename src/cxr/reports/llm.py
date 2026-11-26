@@ -12,9 +12,31 @@ Priority Cascade:
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any
 
 from cxr.ai.gemini_engine import AI_RUNTIME_CONFIG, synthesize_with_gemini_flash
+
+_GROQ_CLIENT_LOCK = threading.Lock()
+_GROQ_CLIENTS: dict[str, Any] = {}
+
+
+def _get_groq_client(api_key: str) -> Any:
+    """Reuse a persistent OpenAI/Groq client per API key to eliminate TLS handshake overhead."""
+    client = _GROQ_CLIENTS.get(api_key)
+    if client is None:
+        with _GROQ_CLIENT_LOCK:
+            client = _GROQ_CLIENTS.get(api_key)
+            if client is None:
+                from openai import OpenAI
+
+                client = OpenAI(
+                    api_key=api_key,
+                    base_url="https://api.groq.com/openai/v1",
+                    timeout=10.5,
+                )
+                _GROQ_CLIENTS[api_key] = client
+    return client
 
 SYSTEM_PROMPT = """You are a distinguished academic thoracic radiologist dictating a formal chest radiograph report and clinical synthesis.
 Synthesize the provided preliminary AI multi-label predictions, anatomical draft, quantitative CTR, Grad-CAM++ localizations, and patient clinical profile into an authoritative, ACR/RSNA-compliant radiology report.
@@ -204,10 +226,8 @@ PATIENT CLINICAL CONTEXT:
     if groq_key and (provider in (None, "groq")):
         try:
             import json
-            from openai import OpenAI
-            from cxr.ai.gemini_engine import ClinicalReportSchema
 
-            client = OpenAI(api_key=groq_key, base_url="https://api.groq.com/openai/v1", timeout=15.0)
+            client = _get_groq_client(groq_key)
             model_candidates = list(
                 dict.fromkeys(
                     m

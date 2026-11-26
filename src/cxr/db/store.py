@@ -112,7 +112,8 @@ class ClinicalStore:
         conn.row_factory = sqlite3.Row
         try:
             conn.execute("PRAGMA foreign_keys = ON;")
-            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA synchronous = NORMAL;")
+            conn.execute("PRAGMA temp_store = MEMORY;")
             yield conn
             conn.commit()
         except Exception:
@@ -123,6 +124,8 @@ class ClinicalStore:
 
     def _init_schema(self) -> None:
         with self._lock, self._connect() as conn:
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA cache_size = -16000;")
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS users (

@@ -73,6 +73,106 @@ export const api = {
     });
   },
 
+  async predictStream(
+    params: {
+      file: File;
+      threshold: number;
+      tta: boolean;
+      useGeminiDecision: boolean;
+      useLlm: boolean;
+      colormap: ColormapName;
+      patient?: PatientProfile;
+      userId?: string | null;
+      studyName?: string;
+      sampleId?: string | null;
+    },
+    onStage?: (event: "vision" | "consensus", payload: Partial<PredictionResponse>) => void
+  ): Promise<PredictionResponse> {
+    const fd = new FormData();
+    fd.append("file", params.file);
+    fd.append("threshold", String(params.threshold));
+    fd.append("tta", String(params.tta));
+    fd.append("use_gemini_decision", String(params.useGeminiDecision));
+    fd.append("use_llm", String(params.useLlm));
+    fd.append("colormap", params.colormap);
+    fd.append("run_segmentation", "true");
+    if (params.userId) fd.append("user_id", params.userId);
+    if (params.studyName) fd.append("study_name", params.studyName);
+    if (params.sampleId) fd.append("sample_id", params.sampleId);
+    if (params.patient) {
+      fd.append("patient_context", JSON.stringify(params.patient));
+    }
+
+    const res = await fetch("/api/v1/predict/stream", {
+      method: "POST",
+      body: fd,
+    });
+    if (!res.ok) {
+      let detail = `HTTP ${res.status}`;
+      try {
+        const body = await res.json();
+        detail = body.detail || detail;
+      } catch {
+        // ignore
+      }
+      throw new Error(detail);
+    }
+
+    if (!res.body) {
+      return api.predict(params);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finalResp: PredictionResponse | null = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const parsed = JSON.parse(line) as {
+          event: "vision" | "consensus" | "complete" | "error";
+          data?: PredictionResponse;
+          detail?: string;
+        };
+        if (parsed.event === "error") {
+          throw new Error(parsed.detail || "Streaming diagnosis failed.");
+        }
+        if (parsed.event === "vision" || parsed.event === "consensus") {
+          if (parsed.data && onStage) onStage(parsed.event, parsed.data);
+        } else if (parsed.event === "complete" && parsed.data) {
+          finalResp = parsed.data;
+        }
+      }
+    }
+
+    const tail = buffer.trim();
+    if (tail) {
+      const parsed = JSON.parse(tail) as {
+        event: string;
+        data?: PredictionResponse;
+        detail?: string;
+      };
+      if (parsed.event === "error") {
+        throw new Error(parsed.detail || "Streaming diagnosis failed.");
+      }
+      if (parsed.event === "complete" && parsed.data) {
+        finalResp = parsed.data;
+      }
+    }
+
+    if (!finalResp) {
+      throw new Error("Prediction stream closed before final response.");
+    }
+    return finalResp;
+  },
+
   async predictBatch(files: File[], threshold: number): Promise<BatchPredictionResponse> {
     const fd = new FormData();
     files.forEach((f) => fd.append("files", f));

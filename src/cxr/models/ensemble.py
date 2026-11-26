@@ -140,6 +140,11 @@ class ClinicalEnsemble:
     ) -> None:
         self.device = device
         self.mode = mode
+        if device.type == "cuda":
+            try:
+                torch.set_float32_matmul_precision("high")
+            except Exception:
+                pass
         self.models: dict[str, torch.nn.Module] = {}
         self._op_threshs: dict[str, tuple[np.ndarray | None, list[str]]] = {}
         self.seg_model: torch.nn.Module | None = None
@@ -370,80 +375,126 @@ class ClinicalEnsemble:
         stacked = np.stack([img, crop], axis=0)[:, None, :, :].astype(np.float32)
         return torch.from_numpy(stacked).to(device)
 
-    def predict(
+    @staticmethod
+    def interpret_ctr(ctr: float | None, projection_view: str = "PA_UPRIGHT") -> tuple[str, float]:
+        """Return projection-aware `(ctr_status, enlarged_cutoff)` accounting for AP magnification."""
+        is_ap = "AP" in (projection_view or "").upper()
+        cutoff = 0.58 if is_ap else 0.53
+        border = 0.55 if is_ap else 0.50
+        if ctr is None:
+            return "Unavailable", cutoff
+        if is_ap:
+            if ctr >= cutoff:
+                return "Enlarged for AP Portable (>=0.58 — Cardiomegaly range)", cutoff
+            if ctr >= border:
+                return "Borderline for AP Portable (0.55–0.58; AP magnification adjusted)", cutoff
+            return "Normal for AP Portable (<0.55; AP magnification adjusted)", cutoff
+        if ctr >= cutoff:
+            return "Enlarged (>=0.53 — Cardiomegaly range)", cutoff
+        if ctr >= border:
+            return "Borderline (0.50–0.53)", cutoff
+        return "Normal (<0.50)", cutoff
+
+    def predict_vision(
         self,
         pil_img: Image.Image,
         image_size: int = 224,
         tta: bool = True,
         run_segmentation: bool = True,
-        gemini_decision: dict[str, Any] | None = None,
-        gemini_decision_future: Any | None = None,
-        gemini_weight: float = 0.20,
     ) -> dict[str, Any]:
-        """Run 4-backbone FP16 transfer ensemble + non-chiral TTA + PSPNet + Gemini Decision 1 fusion."""
+        """Zero-stall FP16 4-backbone CNN ensemble + PSPNet segmentation stage.
+
+        Launches all 4 backbones on GPU before triggering a single host sync, avoiding
+        4 sequential CUDA-to-CPU pipeline stalls, and reuses TTA tensors cleanly.
+        """
         t0 = time.perf_counter()
         norm_224, norm_512, display_rgb_512 = preprocess_radiograph(pil_img, image_size=image_size)
-        x224 = torch.from_numpy(norm_224).to(self.device)
-        x512 = torch.from_numpy(norm_512).to(self.device)
-
         use_amp = self.device.type == "cuda"
-        tta_224 = self._build_scale_tta(norm_224, self.device) if tta else None
-        tta_512 = self._build_scale_tta(norm_512, self.device) if tta else None
 
-        backbone_cal_logits: dict[str, dict[str, float]] = {}
-        backbone_cal_probs: dict[str, dict[str, float]] = {}
+        if tta:
+            in_224 = self._build_scale_tta(norm_224, self.device)
+            in_512 = self._build_scale_tta(norm_512, self.device)
+            x224 = in_224[0:1]
+            x512 = in_512[0:1]
+        else:
+            in_224 = torch.from_numpy(norm_224).to(self.device, non_blocking=use_amp)
+            in_512 = torch.from_numpy(norm_512).to(self.device, non_blocking=use_amp)
+            x224 = in_224
+            x512 = in_512
 
+        gpu_outputs: dict[str, torch.Tensor] = {}
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp, dtype=torch.float16):
+            with torch.inference_mode(), torch.amp.autocast("cuda", enabled=use_amp, dtype=torch.float16):
                 for key, mdl in self.models.items():
-                    if "512" in key:
-                        if tta_512 is not None:
-                            outs = mdl(tta_512).float().cpu().numpy()
-                            logits_vec = 0.72 * outs[0] + 0.28 * outs[1]
-                        else:
-                            logits_vec = mdl(x512).float().squeeze(0).cpu().numpy()
-                    else:
-                        if tta_224 is not None:
-                            outs = mdl(tta_224).float().cpu().numpy()
-                            logits_vec = 0.72 * outs[0] + 0.28 * outs[1]
-                        else:
-                            logits_vec = mdl(x224).float().squeeze(0).cpu().numpy()
+                    inp = in_512 if "512" in key else in_224
+                    out = mdl(inp).float()
+                    gpu_outputs[key] = (0.72 * out[0] + 0.28 * out[1]) if tta else out.squeeze(0)
 
-                    cal_z_map: dict[str, float] = {}
-                    cal_p_map: dict[str, float] = {}
-                    mdl_paths = list(getattr(mdl, "pathologies", []))
-                    for p in PATHOLOGIES:
-                        if p in mdl_paths:
-                            raw_z = float(logits_vec[mdl_paths.index(p)])
-                            if not math.isnan(raw_z):
-                                cal_z = self._calibrate_backbone_logit(key, p, raw_z)
-                                cal_z_map[p] = cal_z
-                                cal_p_map[p] = round(_sigmoid(cal_z), 4)
-                    backbone_cal_logits[key] = cal_z_map
-                    backbone_cal_probs[key] = cal_p_map
+        # Single batched CPU readback after all GPU models have been enqueued
+        backbone_cal_logits: dict[str, dict[str, float]] = {}
+        backbone_cal_probs: dict[str, dict[str, float]] = {}
+        for key, out_t in gpu_outputs.items():
+            logits_vec = out_t.cpu().numpy()
+            mdl = self.models[key]
+            cal_z_map: dict[str, float] = {}
+            cal_p_map: dict[str, float] = {}
+            mdl_paths = list(getattr(mdl, "pathologies", []))
+            for p in PATHOLOGIES:
+                if p in mdl_paths:
+                    raw_z = float(logits_vec[mdl_paths.index(p)])
+                    if not math.isnan(raw_z):
+                        cal_z = self._calibrate_backbone_logit(key, p, raw_z)
+                        cal_z_map[p] = cal_z
+                        cal_p_map[p] = round(_sigmoid(cal_z), 4)
+            backbone_cal_logits[key] = cal_z_map
+            backbone_cal_probs[key] = cal_p_map
 
         cnn_ms = round((time.perf_counter() - t0) * 1000, 2)
 
-        # Anatomical segmentation (CTR + organ masks)
         anatomy: dict[str, Any] = {}
         seg_masks: dict[str, np.ndarray] = {}
         if run_segmentation and self.seg_model is not None:
             anatomy, seg_masks = self._run_segmentation(x512)
 
         pure_gpu_ms = round((time.perf_counter() - t0) * 1000, 2)
+        return {
+            "backbone_cal_logits": backbone_cal_logits,
+            "backbone_cal_probs": backbone_cal_probs,
+            "anatomy": anatomy,
+            "seg_masks": seg_masks,
+            "tensor_224": x224.detach().clone(),
+            "display_rgb_512": display_rgb_512,
+            "active_backbones": list(self.active_backbones),
+            "cnn_latency_ms": cnn_ms,
+            "pure_gpu_ms": pure_gpu_ms,
+        }
 
-        # Collect in-flight Gemini Decision 1 future AFTER GPU CNN + PSPNet already finished!
-        if gemini_decision is None and gemini_decision_future is not None:
-            try:
-                gemini_decision = gemini_decision_future.result(timeout=14.0)
-            except Exception as exc:
-                gemini_decision = {"active": False, "status": "timeout", "latency_ms": 0.0, "message": str(exc)}
+    def fuse_predictions(
+        self,
+        vision_bundle: dict[str, Any],
+        gemini_decision: dict[str, Any] | None = None,
+        gemini_weight: float = 0.20,
+        dicom_view: str | None = None,
+    ) -> dict[str, Any]:
+        """Fuse 4-backbone calibrated logits with projection-aware CTR & Gemini Decision 1."""
+        backbone_cal_logits = vision_bundle["backbone_cal_logits"]
+        backbone_cal_probs = vision_bundle["backbone_cal_probs"]
+        anatomy = dict(vision_bundle.get("anatomy") or {})
 
         gemini_active = bool(gemini_decision and gemini_decision.get("active"))
         gem_raw_scores: dict[str, float] = gemini_decision.get("pathology_scores", {}) if gemini_active else {}
         gem_confs: dict[str, float] = gemini_decision.get("pathology_confidences", {}) if gemini_active else {}
-        proj_view = str(gemini_decision.get("projection_view", "PA_UPRIGHT")) if gemini_active else "PA_UPRIGHT"
+
+        # Projection resolution priority: explicit DICOM ViewPosition tag (AP/PA) -> Gemini Decision 1 -> PA default
+        dicom_v = (dicom_view or "").strip().upper()
+        if dicom_v in ("AP", "AP_PORTABLE", "PA", "PA_UPRIGHT", "LATERAL"):
+            proj_view = "AP_PORTABLE" if dicom_v.startswith("AP") else ("PA_UPRIGHT" if dicom_v.startswith("PA") else dicom_v)
+        elif gemini_active and gemini_decision.get("projection_view"):
+            proj_view = str(gemini_decision.get("projection_view"))
+        else:
+            proj_view = "PA_UPRIGHT"
+
         img_quality = (
             float(gemini_decision.get("image_quality_score", 3.5))
             if gemini_active and gemini_decision.get("image_quality_score") is not None
@@ -451,9 +502,16 @@ class ClinicalEnsemble:
         )
         is_ap_view = "AP" in proj_view.upper()
 
+        # Re-evaluate CTR interpretation AFTER projection view is known so AP scans never report false PA Cardiomegaly!
+        ctr_val = anatomy.get("ctr")
+        if anatomy:
+            ctr_status, ctr_cutoff = self.interpret_ctr(ctr_val, proj_view)
+            anatomy["ctr_status"] = ctr_status
+            anatomy["ctr_cutoff"] = ctr_cutoff
+            anatomy["projection_view"] = proj_view
+
         fused_scores: dict[str, float] = {}
         per_pathology_meta: dict[str, dict[str, Any]] = {}
-        ctr_val = anatomy.get("ctr")
 
         for p in PATHOLOGIES:
             weighted_logit = 0.0
@@ -477,8 +535,6 @@ class ClinicalEnsemble:
                 epistemic_std = 0.0
             else:
                 cnn_logit = weighted_logit / weight_sum
-                # Outlier-hallucination guard: when >= 3 backbones exist and ONLY 1 spikes >0.60
-                # while all others stay low (<0.32), gently dampen single-backbone noise
                 if len(cal_vals) >= 3:
                     sorted_v = sorted(cal_vals)
                     if sorted_v[-1] > 0.60 and sorted_v[-2] < 0.34:
@@ -486,9 +542,7 @@ class ClinicalEnsemble:
                 cnn_prob = _sigmoid(cnn_logit)
                 epistemic_std = float(np.std(cal_vals)) if len(cal_vals) > 1 else 0.02
 
-            # Projection-Aware Quantitative CTR Prior for Cardiomegaly:
-            # Bedside AP radiographs magnify the cardiac silhouette by ~10-15%, so AP uses cutoff >= 0.58
-            # while standard upright PA films use cutoff >= 0.53 (preventing false-positive AP Cardiomegaly).
+            # Projection-Aware Quantitative CTR Prior for Cardiomegaly
             if p == "Cardiomegaly" and ctr_val is not None:
                 enlarged_cutoff = 0.58 if is_ap_view else 0.53
                 if ctr_val >= enlarged_cutoff:
@@ -503,7 +557,6 @@ class ClinicalEnsemble:
             if gemini_active and p in gem_raw_scores:
                 gem_cal_prob = self.calibrate_gemini_probability(float(gem_raw_scores[p]))
                 gem_conf = float(gem_confs.get(p, 0.75))
-                # Increase foundation-VLM weight smoothly when CNNs disagree or scan quality is OOD (< 2.5/5)
                 ood_boost = 0.10 if img_quality < 2.5 else 0.0
                 base_w = min(0.28, max(0.08, gemini_weight * 0.68))
                 eff_w = max(0.10, min(0.38, (base_w + 0.45 * epistemic_std + ood_boost) * (0.7 + 0.3 * gem_conf)))
@@ -530,11 +583,44 @@ class ClinicalEnsemble:
             "scores": fused_scores,
             "meta": per_pathology_meta,
             "anatomy": anatomy,
-            "seg_masks": seg_masks,
-            "tensor_224": x224,
-            "display_rgb_512": display_rgb_512,
-            "active_backbones": list(self.active_backbones),
-            "cnn_latency_ms": cnn_ms,
-            "pure_gpu_ms": pure_gpu_ms,
+            "seg_masks": vision_bundle.get("seg_masks", {}),
+            "tensor_224": vision_bundle["tensor_224"],
+            "display_rgb_512": vision_bundle["display_rgb_512"],
+            "active_backbones": vision_bundle["active_backbones"],
+            "cnn_latency_ms": vision_bundle["cnn_latency_ms"],
+            "pure_gpu_ms": vision_bundle["pure_gpu_ms"],
             "decision_summary": gemini_decision,
         }
+
+    def predict(
+        self,
+        pil_img: Image.Image,
+        image_size: int = 224,
+        tta: bool = True,
+        run_segmentation: bool = True,
+        gemini_decision: dict[str, Any] | None = None,
+        gemini_decision_future: Any | None = None,
+        gemini_weight: float = 0.20,
+        dicom_view: str | None = None,
+    ) -> dict[str, Any]:
+        """Run 4-backbone FP16 transfer ensemble + non-chiral TTA + PSPNet + Gemini Decision 1 fusion."""
+        vision_bundle = self.predict_vision(
+            pil_img=pil_img,
+            image_size=image_size,
+            tta=tta,
+            run_segmentation=run_segmentation,
+        )
+
+        # Collect in-flight Gemini Decision 1 future AFTER GPU CNN + PSPNet already finished!
+        if gemini_decision is None and gemini_decision_future is not None:
+            try:
+                gemini_decision = gemini_decision_future.result(timeout=12.0)
+            except Exception as exc:
+                gemini_decision = {"active": False, "status": "timeout", "latency_ms": 0.0, "message": str(exc)}
+
+        return self.fuse_predictions(
+            vision_bundle=vision_bundle,
+            gemini_decision=gemini_decision,
+            gemini_weight=gemini_weight,
+            dicom_view=dicom_view,
+        )

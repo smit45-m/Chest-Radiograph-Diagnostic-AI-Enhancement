@@ -1,17 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Upload } from "lucide-react";
 import { AmbientRadiologyField } from "./components/AmbientRadiologyField";
-import { BatchAndSpecsSection } from "./components/BatchAndSpecsSection";
-import { ClinicalReportSection } from "./components/ClinicalReportSection";
 import { CommandPalette } from "./components/CommandPalette";
-import { ConsensusArchitecture } from "./components/ConsensusArchitecture";
 import { DiagnosticStudio } from "./components/DiagnosticStudio";
 import { GeminiEngineModal } from "./components/GeminiEngineModal";
 import { HeroOverview } from "./components/HeroOverview";
 import { PatientContextDrawer } from "./components/PatientContextDrawer";
 import { PrintConsultationSheet } from "./components/PrintConsultationSheet";
-import { RecordsAndEvaluationsPage } from "./components/RecordsAndEvaluationsPage";
 import { SidebarNav } from "./components/SidebarNav";
 import { TopHeader } from "./components/TopHeader";
 import {
@@ -23,6 +19,7 @@ import {
 import { api } from "./services/api";
 import type {
   AIConfigStatus,
+  AnalysisStage,
   BatchPredictionResponse,
   ColormapName,
   CopilotMessage,
@@ -37,6 +34,22 @@ import type {
   UserDetail,
   UserRecord,
 } from "./types/clinical";
+
+// Route-level code splitting for secondary workspace views -> dramatically smaller initial JS bundle
+const ConsensusArchitecture = lazy(() =>
+  import("./components/ConsensusArchitecture").then((m) => ({ default: m.ConsensusArchitecture }))
+);
+const ClinicalReportSection = lazy(() =>
+  import("./components/ClinicalReportSection").then((m) => ({ default: m.ClinicalReportSection }))
+);
+const BatchAndSpecsSection = lazy(() =>
+  import("./components/BatchAndSpecsSection").then((m) => ({ default: m.BatchAndSpecsSection }))
+);
+const RecordsAndEvaluationsPage = lazy(() =>
+  import("./components/RecordsAndEvaluationsPage").then((m) => ({
+    default: m.RecordsAndEvaluationsPage,
+  }))
+);
 
 const VALID_PAGES = new Set<PageId>([
   "overview",
@@ -101,6 +114,7 @@ export default function App() {
   const [heatmapCache, setHeatmapCache] = useState<Record<string, HeatmapData>>({});
   const [heatmapLoading, setHeatmapLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisStage, setAnalysisStage] = useState<AnalysisStage>("idle");
   const [reportLoading, setReportLoading] = useState(false);
   const [holdingSpace, setHoldingSpace] = useState(false);
 
@@ -220,6 +234,7 @@ export default function App() {
       explicitUserId?: string | null
     ) => {
       setIsAnalyzing(true);
+      setAnalysisStage("vision");
       setActiveStudyId(studyId);
       setActiveStudyRecordId(null);
       setActiveStudyName(studyLabel);
@@ -238,18 +253,78 @@ export default function App() {
       try {
         const cfg = aiConfigRef.current;
         const ownerUserId = explicitUserId !== undefined ? explicitUserId : activeUserIdRef.current;
-        const res = await api.predict({
-          file,
-          threshold: cutoff,
-          tta: true,
-          useGeminiDecision: cfg?.gemini_decision_enabled ?? true,
-          useLlm: cfg?.gemini_flash_enabled ?? true,
-          colormap: cmap,
-          patient: patientCtx,
-          userId: ownerUserId,
-          studyName: studyLabel,
-          sampleId: studyId,
-        });
+        const useDecision = cfg?.gemini_decision_enabled ?? true;
+        const useLlm = cfg?.gemini_flash_enabled ?? true;
+
+        const applyHeatmaps = (hms?: HeatmapData[]) => {
+          if (!hms || !hms.length) return;
+          setHeatmapCache((prev) => {
+            const next = { ...prev };
+            hms.forEach((hm) => {
+              next[hm.pathology] = hm;
+            });
+            return next;
+          });
+        };
+
+        const res = await api.predictStream(
+          {
+            file,
+            threshold: cutoff,
+            tta: true,
+            useGeminiDecision: useDecision,
+            useLlm,
+            colormap: cmap,
+            patient: patientCtx,
+            userId: ownerUserId,
+            studyName: studyLabel,
+            sampleId: studyId,
+          },
+          (stage, partial) => {
+            // Immediately render Vision + Grad-CAM++ + CTR in <400ms while Decision 1 & ACR Report run!
+            setPredictionData((prev) => ({
+              study_id: prev?.study_id ?? null,
+              user_id: prev?.user_id ?? null,
+              predictions: partial.predictions ?? prev?.predictions ?? [],
+              heatmaps: partial.heatmaps ?? prev?.heatmaps ?? [],
+              anatomy: partial.anatomy ?? prev?.anatomy ?? null,
+              decision_summary: partial.decision_summary ?? prev?.decision_summary ?? null,
+              ensemble_info: partial.ensemble_info ?? prev?.ensemble_info ?? {},
+              timings: { ...(prev?.timings || {}), ...(partial.timings || {}) },
+              dicom_metadata: partial.dicom_metadata ?? prev?.dicom_metadata ?? null,
+              report: prev?.report ?? {
+                findings: "",
+                impression: "Synthesizing clinical report...",
+                full_text: "",
+                source: "streaming",
+              },
+              patient: partial.patient ?? patientCtx,
+              inference_time_ms: partial.vision_latency_ms ?? prev?.inference_time_ms ?? 0,
+              vision_latency_ms: partial.vision_latency_ms ?? prev?.vision_latency_ms ?? 0,
+            }));
+
+            if (stage === "vision") {
+              setHeatmapCache({});
+              applyHeatmaps(partial.heatmaps);
+              const lead =
+                partial.predictions?.find((p) => p.score >= cutoff)?.name ||
+                partial.heatmaps?.[0]?.pathology ||
+                partial.predictions?.[0]?.name ||
+                null;
+              if (lead) setActivePathology(lead);
+              setAnalysisStage(useDecision ? "consensus" : "report");
+            } else if (stage === "consensus") {
+              applyHeatmaps(partial.heatmaps);
+              const lead =
+                partial.predictions?.find((p) => p.score >= cutoff)?.name ||
+                partial.heatmaps?.[0]?.pathology ||
+                partial.predictions?.[0]?.name ||
+                null;
+              if (lead) setActivePathology(lead);
+              setAnalysisStage("report");
+            }
+          }
+        );
 
         setPredictionData(res);
         setReport(res.report);
@@ -277,6 +352,7 @@ export default function App() {
         notify(err instanceof Error ? err.message : "Failed to analyze chest radiograph.");
       } finally {
         setIsAnalyzing(false);
+        setAnalysisStage("idle");
       }
     },
     [notify, refreshUserDatabase]
@@ -970,6 +1046,7 @@ export default function App() {
           predictionData={predictionData}
           threshold={threshold}
           isAnalyzing={isAnalyzing}
+          analysisStage={analysisStage}
           onSelectPage={navigatePage}
           onOpenCommand={() => setCommandOpen(true)}
           onOpenGemini={() => setGeminiModalOpen(true)}
@@ -1016,6 +1093,7 @@ export default function App() {
                   colormap={colormap}
                   patient={patient}
                   isAnalyzing={isAnalyzing}
+                  analysisStage={analysisStage}
                   holdingSpace={holdingSpace}
                   onSelectSample={(s) => handleSelectSample(s, false)}
                   onFileUpload={handleFileUpload}
@@ -1028,78 +1106,99 @@ export default function App() {
                 />
               )}
 
-              {activePage === "consensus" && (
-                <ConsensusArchitecture
-                  predictionData={predictionData}
-                  threshold={threshold}
-                  onInspectPathology={(name) => {
-                    handleSelectPathology(name);
-                    navigatePage("studio");
-                  }}
-                  onOpenGemini={() => setGeminiModalOpen(true)}
-                  onNavigatePage={navigatePage}
-                />
-              )}
+              <Suspense
+                fallback={
+                  <div className="mx-auto flex max-w-[1280px] items-center justify-center px-8 py-24">
+                    <div
+                      className="flex items-center gap-2.5 rounded-full border px-4 py-2 font-mono-tech text-xs"
+                      style={{
+                        borderColor: "var(--border-subtle)",
+                        backgroundColor: "var(--bg-elevated)",
+                        color: "var(--text-secondary)",
+                      }}
+                    >
+                      <span
+                        className="h-2 w-2 rounded-full clinical-led"
+                        style={{ backgroundColor: "var(--accent-clinical)" }}
+                      />
+                      <span>Loading workspace module...</span>
+                    </div>
+                  </div>
+                }
+              >
+                {activePage === "consensus" && (
+                  <ConsensusArchitecture
+                    predictionData={predictionData}
+                    threshold={threshold}
+                    onInspectPathology={(name) => {
+                      handleSelectPathology(name);
+                      navigatePage("studio");
+                    }}
+                    onOpenGemini={() => setGeminiModalOpen(true)}
+                    onNavigatePage={navigatePage}
+                  />
+                )}
 
-              {activePage === "report" && (
-                <ClinicalReportSection
-                  activeStudyName={activeStudyName}
-                  activeStudyRecordId={activeStudyRecordId}
-                  activeUserName={activeUserDetail?.full_name || null}
-                  predictionData={predictionData}
-                  report={report}
-                  reportLoading={reportLoading}
-                  copilotMessages={copilotMessages}
-                  copilotLoading={copilotLoading}
-                  physicianName={physicianName}
-                  physicianCreds={physicianCreds}
-                  physicianNotes={physicianNotes}
-                  signedAt={signedAt}
-                  onPhysicianNameChange={setPhysicianName}
-                  onPhysicianCredsChange={setPhysicianCreds}
-                  onPhysicianNotesChange={setPhysicianNotes}
-                  onSignReport={handleSignReport}
-                  onSaveTranscript={handleSaveTranscript}
-                  onResynthesize={() => handleResynthesize()}
-                  onSendCopilot={handleSendCopilot}
-                  onClearCopilot={() => {
-                    setCopilotMessages([]);
-                    setLastInteractionId(null);
-                  }}
-                  onExportFhir={handleExportFhir}
-                  onPrintPdf={() => window.print()}
-                />
-              )}
+                {activePage === "report" && (
+                  <ClinicalReportSection
+                    activeStudyName={activeStudyName}
+                    activeStudyRecordId={activeStudyRecordId}
+                    activeUserName={activeUserDetail?.full_name || null}
+                    predictionData={predictionData}
+                    report={report}
+                    reportLoading={reportLoading || analysisStage === "report"}
+                    copilotMessages={copilotMessages}
+                    copilotLoading={copilotLoading}
+                    physicianName={physicianName}
+                    physicianCreds={physicianCreds}
+                    physicianNotes={physicianNotes}
+                    signedAt={signedAt}
+                    onPhysicianNameChange={setPhysicianName}
+                    onPhysicianCredsChange={setPhysicianCreds}
+                    onPhysicianNotesChange={setPhysicianNotes}
+                    onSignReport={handleSignReport}
+                    onSaveTranscript={handleSaveTranscript}
+                    onResynthesize={() => handleResynthesize()}
+                    onSendCopilot={handleSendCopilot}
+                    onClearCopilot={() => {
+                      setCopilotMessages([]);
+                      setLastInteractionId(null);
+                    }}
+                    onExportFhir={handleExportFhir}
+                    onPrintPdf={() => window.print()}
+                  />
+                )}
 
-              {activePage === "triage" && (
-                <BatchAndSpecsSection
-                  samples={samples}
-                  batchResult={batchResult}
-                  batchLoading={batchLoading}
-                  health={health}
-                  aiConfig={aiConfig}
-                  onRunBenchmarkBatch={handleRunBenchmarkBatch}
-                  onUploadBatchFiles={handleUploadBatchFiles}
-                  onInspectSampleByFilename={handleInspectSampleByFilename}
-                />
-              )}
+                {activePage === "triage" && (
+                  <BatchAndSpecsSection
+                    samples={samples}
+                    batchResult={batchResult}
+                    batchLoading={batchLoading}
+                    health={health}
+                    aiConfig={aiConfig}
+                    onRunBenchmarkBatch={handleRunBenchmarkBatch}
+                    onUploadBatchFiles={handleUploadBatchFiles}
+                    onInspectSampleByFilename={handleInspectSampleByFilename}
+                  />
+                )}
 
-              {activePage === "records" && (
-                <RecordsAndEvaluationsPage
-                  users={users}
-                  activeUserId={activeUserId}
-                  activeUserDetail={activeUserDetail}
-                  evaluations={evaluations}
-                  savingUser={savingUser}
-                  onSelectUser={handleSelectUser}
-                  onCreateUser={handleCreateUser}
-                  onUpdateUser={handleUpdateUser}
-                  onDeleteUser={handleDeleteUser}
-                  onLoadStudy={handleLoadArchivedStudy}
-                  onDeleteStudy={handleDeleteStudy}
-                  onOpenStudio={() => navigatePage("studio")}
-                />
-              )}
+                {activePage === "records" && (
+                  <RecordsAndEvaluationsPage
+                    users={users}
+                    activeUserId={activeUserId}
+                    activeUserDetail={activeUserDetail}
+                    evaluations={evaluations}
+                    savingUser={savingUser}
+                    onSelectUser={handleSelectUser}
+                    onCreateUser={handleCreateUser}
+                    onUpdateUser={handleUpdateUser}
+                    onDeleteUser={handleDeleteUser}
+                    onLoadStudy={handleLoadArchivedStudy}
+                    onDeleteStudy={handleDeleteStudy}
+                    onOpenStudio={() => navigatePage("studio")}
+                  />
+                )}
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

@@ -24,6 +24,7 @@ class PathologyPrediction(BaseModel):
     name: str = Field(..., description="Pathology name, e.g. 'Cardiomegaly'")
     score: float = Field(..., ge=0.0, le=1.0, description="Calibrated fused probability")
     severity: str = Field(..., description="mild / moderate / severe")
+    review_flag: str = Field(default="clear", description="positive | borderline | uncertain | clear")
     uncertainty: float = Field(default=0.02, description="Epistemic inter-model std dev")
     agreement: float = Field(default=0.95, description="Inter-backbone consensus score [0..1]")
     ci_low: float | None = Field(default=None, description="Lower 95% confidence bound")
@@ -56,6 +57,8 @@ class AnatomyData(BaseModel):
 
     ctr: float | None = Field(default=None, description="Cardiothoracic Ratio (cardiac width / thoracic width)")
     ctr_status: str = Field(default="Unavailable", description="Clinical interpretation of CTR")
+    ctr_cutoff: float | None = Field(default=None, description="Projection-aware CTR cardiomegaly cutoff (0.53 PA vs 0.58 AP)")
+    projection_view: str | None = Field(default=None, description="Resolved view position (PA_UPRIGHT / AP_PORTABLE / LATERAL)")
     ctr_coords: dict[str, float] | None = Field(default=None, description="Normalized CTR caliper coordinates")
     left_lung_pct: float | None = Field(default=None)
     right_lung_pct: float | None = Field(default=None)
@@ -115,6 +118,7 @@ class PredictionResponse(BaseModel):
     dicom_metadata: dict[str, Any] | None = Field(default=None, description="Extracted DICOM header tags if .dcm")
     report: ReportData
     patient: PatientProfile | None = Field(default=None, description="Patient clinical profile used during synthesis")
+    cache_hit: bool = Field(default=False, description="True when served instantaneously from SHA-256 LRU cache")
     inference_time_ms: float = Field(..., description="End-to-end latency in ms")
     vision_latency_ms: float | None = Field(default=None, description="Pure GPU vision + Grad-CAM++ latency in ms")
 
