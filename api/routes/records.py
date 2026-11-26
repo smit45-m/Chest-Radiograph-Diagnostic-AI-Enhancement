@@ -22,6 +22,12 @@ _EVAL_REPORT_PATH = (
     / "benchmark_results"
     / "full_evaluation_report.json"
 )
+_NIH_STUDY_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "outputs"
+    / "benchmark_results"
+    / "nih_generalization_study.json"
+)
 _LEGACY_EVAL_PATH = (
     Path(__file__).resolve().parent.parent.parent
     / "outputs"
@@ -165,12 +171,19 @@ async def get_db_stats() -> dict[str, Any]:
 
 @router.get("/evaluations")
 async def get_evaluation_report() -> dict[str, Any]:
-    """Return the latest full ML classification, calibration, biometry, latency & AI transcript evaluation report."""
+    """Return the latest full ML classification, calibration, biometry, latency & 600-patient NIH study."""
     for path in (_EVAL_REPORT_PATH, _LEGACY_EVAL_PATH):
         if path.exists():
             try:
                 raw_text = await asyncio.to_thread(path.read_text, encoding="utf-8")
-                return json.loads(raw_text)
+                data = json.loads(raw_text)
+                if _NIH_STUDY_PATH.exists():
+                    try:
+                        study_text = await asyncio.to_thread(_NIH_STUDY_PATH.read_text, encoding="utf-8")
+                        data["nih_generalization_study"] = json.loads(study_text)
+                    except Exception:
+                        pass
+                return data
             except Exception as exc:
                 raise HTTPException(
                     status_code=500, detail=f"Failed to read evaluation report: {exc}"

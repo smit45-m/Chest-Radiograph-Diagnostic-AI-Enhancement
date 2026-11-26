@@ -17,6 +17,8 @@ export interface PathologyPrediction {
   score: number;
   severity: "mild" | "moderate" | "severe";
   review_flag?: "positive" | "borderline" | "uncertain" | "clear";
+  conformal_decision?: "AUTO_POSITIVE" | "AUTO_NEGATIVE" | "DEFER_RADIOLOGIST" | null;
+  calibrated_risk?: number | null;
   uncertainty?: number;
   agreement?: number;
   ci_low?: number | null;
@@ -107,6 +109,8 @@ export interface PredictionResponse {
     tta_enabled?: boolean;
     segmentation_enabled?: boolean;
     gemini_decision_active?: boolean;
+    raddino_active?: boolean;
+    meta_calibrator_active?: boolean;
     device?: string;
   };
   timings?: {
@@ -289,6 +293,72 @@ export interface BackboneEvalMetrics {
   ece: number;
 }
 
+export interface NihStudyMetricRow {
+  accuracy: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  micro_roc_auc: number;
+  macro_roc_auc: number;
+  micro_pr_auc: number;
+  macro_pr_auc: number;
+  brier: number;
+}
+
+export interface NihGeneralizationStudy {
+  generated_at?: string;
+  cohort: {
+    oof_train_val_images: number;
+    oof_train_val_patients: number;
+    held_out_test_images: number;
+    held_out_test_patients: number;
+    excluded_benchmark_patients?: number[];
+  };
+  multilabel_full_coverage_test: Record<string, NihStudyMetricRow>;
+  multilabel_conformal_selective_test?: Record<
+    string,
+    {
+      tau_low: number;
+      tau_high: number;
+      test_coverage: number;
+      test_deferred_pct: number;
+      test_accuracy: number;
+      test_precision: number;
+      test_recall: number;
+      test_npv: number;
+      test_f1: number;
+    }
+  >;
+  binary_abnormal_triage_test?: {
+    full_coverage: {
+      roc_auc: number;
+      accuracy: number;
+      precision: number;
+      recall: number;
+      f1: number;
+    };
+    selective_conformal_90: {
+      tau_low: number;
+      tau_high: number;
+      test_coverage: number;
+      test_accuracy: number;
+      test_precision: number;
+      test_recall: number;
+      test_npv: number;
+      test_f1: number;
+    };
+  };
+  per_class_test_5vision?: Array<{
+    pathology: string;
+    support: number;
+    v9_auc: number;
+    v10_5vision_auc: number;
+    v10_5vision_pr: number;
+    meta_blend_alpha: number;
+    oof_f1_threshold: number;
+  }>;
+}
+
 export interface EvaluationReport {
   status?: string;
   generated_at?: string;
@@ -320,6 +390,7 @@ export interface EvaluationReport {
     }
   >;
   backbone_comparison?: Record<string, BackboneEvalMetrics>;
+  nih_generalization_study?: NihGeneralizationStudy;
   latency_sla?: {
     avg_vision_ms: number;
     avg_gradcam_ms: number;

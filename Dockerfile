@@ -48,6 +48,7 @@ COPY configs/ ./configs/
 COPY scripts/ ./scripts/
 COPY data/benchmark_test_set/ ./data/benchmark_test_set/
 COPY outputs/benchmark_results/full_evaluation_report.json ./outputs/benchmark_results/
+COPY outputs/benchmark_results/nih_generalization_study.json ./outputs/benchmark_results/
 COPY --from=frontend-builder /build/web/ ./web/
 
 RUN chown -R appuser:appuser /app /home/appuser

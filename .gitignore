@@ -23,6 +23,7 @@ outputs/*
 !outputs/benchmark_results/
 outputs/benchmark_results/*
 !outputs/benchmark_results/full_evaluation_report.json
+!outputs/benchmark_results/nih_generalization_study.json
 runs/
 logs/
 *.pt

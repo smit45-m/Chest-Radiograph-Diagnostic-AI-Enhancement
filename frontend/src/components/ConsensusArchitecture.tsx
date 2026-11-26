@@ -53,6 +53,14 @@ const BACKBONE_KEYS = [
   },
 ] as const;
 
+const RADDINO_SPEC = {
+  key: "raddino_vit_518",
+  alt: "raddino-vit-518",
+  short: "RAD-DINO",
+  title: "RAD-DINO ViT",
+  spec: "Microsoft ViT-B 518px · 838k CXRs",
+} as const;
+
 function getBackboneScore(
   map: Record<string, number> | undefined,
   primary: string,
@@ -77,6 +85,15 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
   const decision = predictionData?.decision_summary || null;
   const timings = predictionData?.timings || null;
   const activeBackbones = predictionData?.ensemble_info?.active_backbones || [];
+  const hasRadDino =
+    Boolean(predictionData?.ensemble_info?.raddino_active) ||
+    activeBackbones.includes("raddino_vit_518") ||
+    predictions.some((p) => p.backbones?.raddino_vit_518 != null);
+  const displayedBackbones = useMemo(
+    () => (hasRadDino ? [...BACKBONE_KEYS, RADDINO_SPEC] : [...BACKBONE_KEYS]),
+    [hasRadDino]
+  );
+  const totalModels = displayedBackbones.length + 1;
 
   const rows = useMemo(() => {
     if (showAllRows) return predictions;
@@ -126,7 +143,7 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
             </span>
           </h1>
           <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
-            See how all 5 models agree and inspect automated heart &amp; lung geometry.
+            See how all {totalModels} models agree and inspect automated heart &amp; lung geometry.
           </p>
         </div>
 
@@ -147,9 +164,13 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
         </button>
       </div>
 
-      {/* 5 Clean Model Opinion Cards */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {BACKBONE_KEYS.map((b, idx) => {
+      {/* Clean Model Opinion Cards (5 on CPU, 6 with RAD-DINO ViT on GPU) */}
+      <div
+        className={`grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 ${
+          hasRadDino ? "xl:grid-cols-6" : "xl:grid-cols-5"
+        }`}
+      >
+        {displayedBackbones.map((b, idx) => {
           const loaded =
             activeBackbones.some((ab) => ab === b.key || ab === b.alt) ||
             activeBackbones.length > idx;
@@ -504,6 +525,9 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
                     <th className="px-2 py-3 text-right font-medium">NIH-14</th>
                     <th className="px-2 py-3 text-right font-medium">PadChest</th>
                     <th className="px-2 py-3 text-right font-medium">High-Res</th>
+                    {hasRadDino && (
+                      <th className="px-2 py-3 text-right font-medium">RAD-DINO</th>
+                    )}
                     <th className="px-2 py-3 text-right font-medium">Gemini AI</th>
                     <th className="py-3 pl-2 text-right font-medium">Consensus</th>
                   </tr>
@@ -515,6 +539,7 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
                     const dnNih = getBackboneScore(p.backbones, "densenet121_nih", "densenet121-nih");
                     const dnPc = getBackboneScore(p.backbones, "densenet121_pc", "densenet121-pc");
                     const rn50 = getBackboneScore(p.backbones, "resnet50_512", "resnet50-512");
+                    const rad = getBackboneScore(p.backbones, "raddino_vit_518", "raddino-vit-518");
                     const dec = p.gemini_decision_score;
 
                     return (
@@ -563,6 +588,14 @@ export const ConsensusArchitecture: React.FC<ConsensusArchitectureProps> = ({
                         >
                           {rn50 != null ? `${(rn50 * 100).toFixed(0)}%` : "—"}
                         </td>
+                        {hasRadDino && (
+                          <td
+                            className="px-2 py-3.5 text-right font-mono-tech"
+                            style={{ color: "var(--accent-optical)" }}
+                          >
+                            {rad != null ? `${(rad * 100).toFixed(0)}%` : "—"}
+                          </td>
+                        )}
                         <td
                           className="px-2 py-3.5 text-right font-mono-tech"
                           style={{

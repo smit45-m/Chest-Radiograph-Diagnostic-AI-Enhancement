@@ -250,8 +250,10 @@ def main() -> None:
         "densenet121_nih": np.zeros((n_cases, n_classes), dtype=np.float32),
         "densenet121_pc": np.zeros((n_cases, n_classes), dtype=np.float32),
         "resnet50_512": np.zeros((n_cases, n_classes), dtype=np.float32),
+        "raddino_vit_518": np.zeros((n_cases, n_classes), dtype=np.float32),
         "gemini_decision_1": np.zeros((n_cases, n_classes), dtype=np.float32),
     }
+    raddino_seen = False
 
     case_records: list[dict[str, Any]] = []
     decision_active_count = 0
@@ -289,6 +291,11 @@ def main() -> None:
             bmap = p.get("backbones") or {}
             for bk in ("densenet121_all", "densenet121_nih", "densenet121_pc", "resnet50_512"):
                 backbone_mats[bk][i, j] = float(bmap.get(bk, y_cnn[i, j]))
+            if "raddino_vit_518" in bmap:
+                raddino_seen = True
+                backbone_mats["raddino_vit_518"][i, j] = float(bmap["raddino_vit_518"])
+            else:
+                backbone_mats["raddino_vit_518"][i, j] = y_cnn[i, j]
             backbone_mats["gemini_decision_1"][i, j] = float(
                 p["gemini_decision_score"] if p.get("gemini_decision_score") is not None else y_cnn[i, j]
             )
@@ -367,6 +374,7 @@ def main() -> None:
         "densenet121_nih": compute_suite_metrics(y_true, backbone_mats["densenet121_nih"], 0.50),
         "densenet121_pc": compute_suite_metrics(y_true, backbone_mats["densenet121_pc"], 0.50),
         "resnet50_512": compute_suite_metrics(y_true, backbone_mats["resnet50_512"], 0.50),
+        **({"raddino_vit_518": compute_suite_metrics(y_true, backbone_mats["raddino_vit_518"], 0.50)} if raddino_seen else {}),
         "cnn_ensemble_4x": cnn_metrics,
         "gemini_decision_1": compute_suite_metrics(y_true, backbone_mats["gemini_decision_1"], 0.50),
         "fused_consensus": fused_metrics,

@@ -275,3 +275,46 @@ def test_v9_single_pass_gradcam_pathology_zone_and_streaming(model, sample_image
         events = [json.loads(line) for line in res.text.strip().splitlines() if line.strip()]
         assert [e["event"] for e in events] == ["vision", "complete"]
         assert events[-1]["data"]["anatomy"]["ctr_cutoff"] == pytest.approx(0.53)
+
+
+def test_v10_meta_calibrator_artifacts_and_conformal_schema():
+    """Verify v10.0 leak-free OOF meta-calibrator artifacts, RAD-DINO probe & evaluations study."""
+    import json
+
+    from api.schemas import PathologyPrediction
+
+    art_dir = Path(__file__).resolve().parent.parent / "src" / "cxr" / "models" / "artifacts"
+    m4_path = art_dir / "clinical_meta_4cnn.json"
+    m5_path = art_dir / "clinical_meta_5vision.json"
+    rad_path = art_dir / "raddino_probe.npz"
+
+    assert m4_path.exists() and m5_path.exists() and rad_path.exists()
+    m4 = json.loads(m4_path.read_text(encoding="utf-8"))
+    assert len(m4["prior_scale"]) == NUM_CLASSES
+    assert np.asarray(m4["coef_raw"]).shape[0] == NUM_CLASSES
+    assert np.all(np.isfinite(np.asarray(m4["coef_raw"], dtype=np.float32)))
+    assert "conformal_band_90" in m4
+
+    rad = np.load(rad_path)
+    assert rad["weights"].shape == (NUM_CLASSES, 1536)
+    assert rad["biases"].shape == (NUM_CLASSES,)
+    assert np.all(np.isfinite(rad["weights"]))
+
+    # Schema accepts split-conformal decision and calibrated population prevalence risk
+    pred = PathologyPrediction(
+        name="Pneumothorax",
+        score=0.84,
+        severity="severe",
+        review_flag="positive",
+        conformal_decision="AUTO_POSITIVE",
+        calibrated_risk=0.71,
+    )
+    assert pred.conformal_decision == "AUTO_POSITIVE"
+    assert pred.calibrated_risk == pytest.approx(0.71)
+
+    with TestClient(app) as client:
+        res = client.get("/api/v1/evaluations")
+        assert res.status_code == 200
+        body = res.json()
+        assert "nih_generalization_study" in body
+        assert body["nih_generalization_study"]["cohort"]["held_out_test_images"] == 600

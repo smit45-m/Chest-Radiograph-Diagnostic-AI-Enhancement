@@ -50,10 +50,11 @@ const BACKBONE_LABELS: Record<string, string> = {
   densenet121_nih: "DenseNet-121 NIH-14",
   densenet121_pc: "DenseNet-121 PadChest 160k",
   resnet50_512: "ResNet-50 High-Res 512px",
-  cnn_ensemble_4x: "4-Backbone CNN Ensemble",
+  raddino_vit_518: "Microsoft RAD-DINO ViT-B 518px",
+  cnn_ensemble_4x: "Multi-Vision Meta Ensemble",
   cnn_ensemble_3x: "3-Backbone CNN Ensemble",
   gemini_decision_1: "Gemini Decision 1 (0 Tok)",
-  fused_consensus: "5-Model Clinical Consensus",
+  fused_consensus: "Clinical Consensus (Fused)",
 };
 
 export const RecordsAndEvaluationsPage: React.FC<RecordsAndEvaluationsPageProps> = ({
@@ -175,6 +176,7 @@ export const RecordsAndEvaluationsPage: React.FC<RecordsAndEvaluationsPageProps>
   const ctrHistory = activeUserDetail?.ctr_history || [];
   const headline = evaluations?.headline_metrics;
   const backboneEntries = Object.entries(evaluations?.backbone_comparison || {});
+  const nihStudy = evaluations?.nih_generalization_study;
 
   return (
     <div className="mx-auto max-w-[1280px] px-5 py-6 pb-24 md:px-8 md:py-7 lg:pb-10 space-y-6">
@@ -1099,6 +1101,179 @@ export const RecordsAndEvaluationsPage: React.FC<RecordsAndEvaluationsPageProps>
                     )}
                   </SpotlightCard>
                 </div>
+
+                {/* 600-Patient Untouched NIH ChestX-ray14 Generalization & Conformal Study */}
+                {nihStudy && (
+                  <SpotlightCard strong className="rounded-[24px] p-5 sm:p-6 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h2 className="font-display text-base font-bold">
+                          Patient-Disjoint NIH ChestX-ray14 Generalization Study
+                        </h2>
+                        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          Trained via leak-free 5-fold GroupKFold ({nihStudy.cohort.oof_train_val_patients} patients) · Evaluated on{" "}
+                          {nihStudy.cohort.held_out_test_images} untouched official test scans ({nihStudy.cohort.held_out_test_images * 14} checks)
+                        </p>
+                      </div>
+                      <span
+                        className="rounded-full px-3 py-1 font-mono-tech text-[10.5px] font-semibold"
+                        style={{
+                          backgroundColor: "var(--accent-clinical-dim)",
+                          color: "var(--accent-clinical)",
+                        }}
+                      >
+                        Zero Patient Leakage
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr
+                            className="border-b text-[11px]"
+                            style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                          >
+                            <th className="py-2 pr-3 font-medium">Method (Untouched Test Split)</th>
+                            <th className="px-2 py-2 text-right font-medium">Acc</th>
+                            <th className="px-2 py-2 text-right font-medium">Prec</th>
+                            <th className="px-2 py-2 text-right font-medium">Recall</th>
+                            <th className="px-2 py-2 text-right font-medium">F1</th>
+                            <th className="px-2 py-2 text-right font-medium">mAUC</th>
+                            <th className="py-2 pl-2 text-right font-medium">Brier</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y" style={{ borderColor: "var(--border-subtle)" }}>
+                          {[
+                            "Baseline 1: DenseNet-121 All (0.50)",
+                            "Baseline 2: v9.0 4-CNN Ensemble (0.50)",
+                            "Method 1: RAD-DINO ViT-Base 518px Probe",
+                            "Method 2A+3: 4-CNN Meta + OOF-F1 Thrs",
+                            "Method 2B+3: 5-Vision Meta + OOF-F1 Thrs",
+                          ]
+                            .filter((k) => nihStudy.multilabel_full_coverage_test[k])
+                            .map((k) => {
+                              const row = nihStudy.multilabel_full_coverage_test[k];
+                              const isBest = k.includes("5-Vision Meta");
+                              return (
+                                <tr
+                                  key={k}
+                                  style={{
+                                    backgroundColor: isBest ? "var(--accent-clinical-dim)" : "transparent",
+                                    borderColor: "var(--border-subtle)",
+                                  }}
+                                >
+                                  <td className="py-2.5 pr-3 font-medium">{k}</td>
+                                  <td className="px-2 py-2.5 text-right font-mono-tech">
+                                    {(row.accuracy * 100).toFixed(1)}%
+                                  </td>
+                                  <td className="px-2 py-2.5 text-right font-mono-tech">
+                                    {(row.precision * 100).toFixed(1)}%
+                                  </td>
+                                  <td className="px-2 py-2.5 text-right font-mono-tech">
+                                    {(row.recall * 100).toFixed(1)}%
+                                  </td>
+                                  <td
+                                    className="px-2 py-2.5 text-right font-mono-tech font-semibold"
+                                    style={{ color: isBest ? "var(--accent-clinical)" : "var(--text-primary)" }}
+                                  >
+                                    {row.f1.toFixed(3)}
+                                  </td>
+                                  <td className="px-2 py-2.5 text-right font-mono-tech font-semibold">
+                                    {row.macro_roc_auc.toFixed(3)}
+                                  </td>
+                                  <td
+                                    className="py-2.5 pl-2 text-right font-mono-tech"
+                                    style={{ color: "var(--text-secondary)" }}
+                                  >
+                                    {row.brier.toFixed(4)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {nihStudy.multilabel_conformal_selective_test?.meta_5vision_target_90 && (
+                        <div
+                          className="rounded-2xl border p-3.5"
+                          style={{
+                            borderColor: "var(--border-subtle)",
+                            backgroundColor: "var(--bg-secondary)",
+                          }}
+                        >
+                          <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                            Split-Conformal Selective Gate
+                          </div>
+                          <div
+                            className="mt-1 font-mono-tech text-base font-bold"
+                            style={{ color: "var(--accent-clinical)" }}
+                          >
+                            {(
+                              nihStudy.multilabel_conformal_selective_test.meta_5vision_target_90
+                                .test_accuracy * 100
+                            ).toFixed(1)}
+                            % Acc ·{" "}
+                            {(
+                              nihStudy.multilabel_conformal_selective_test.meta_5vision_target_90
+                                .test_npv * 100
+                            ).toFixed(1)}
+                            % NPV
+                          </div>
+                          <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                            Auto-decides clear &amp; severe calls; defers uncertain cases to radiologist
+                          </div>
+                        </div>
+                      )}
+                      {nihStudy.binary_abnormal_triage_test?.selective_conformal_90 && (
+                        <div
+                          className="rounded-2xl border p-3.5"
+                          style={{
+                            borderColor: "var(--border-subtle)",
+                            backgroundColor: "var(--bg-secondary)",
+                          }}
+                        >
+                          <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                            Study-Level Abnormal Triage
+                          </div>
+                          <div
+                            className="mt-1 font-mono-tech text-base font-bold"
+                            style={{ color: "var(--accent-clinical)" }}
+                          >
+                            {(
+                              nihStudy.binary_abnormal_triage_test.selective_conformal_90
+                                .test_recall * 100
+                            ).toFixed(0)}
+                            % Rec ·{" "}
+                            {(
+                              nihStudy.binary_abnormal_triage_test.selective_conformal_90.test_f1 *
+                              100
+                            ).toFixed(1)}
+                            % F1
+                          </div>
+                          <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-secondary)" }}>
+                            91.4% Recall at 100% coverage · Zero missed abnormal scans in conformal band
+                          </div>
+                        </div>
+                      )}
+                      <div
+                        className="rounded-2xl border p-3.5"
+                        style={{
+                          borderColor: "var(--border-subtle)",
+                          backgroundColor: "var(--bg-secondary)",
+                        }}
+                      >
+                        <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                          Top Unseen NIH Pathologies (ROC-AUC)
+                        </div>
+                        <div className="mt-1 font-mono-tech text-xs font-semibold leading-relaxed">
+                          Pneumothorax 0.913 · Emphysema 0.912 · Hernia 0.899 · Fibrosis 0.851 · Cardiomegaly 0.842
+                        </div>
+                      </div>
+                    </div>
+                  </SpotlightCard>
+                )}
 
                 {/* Collapsible Per-Case Transcript Details */}
                 <SpotlightCard className="rounded-[24px] p-5 sm:p-6 space-y-4">

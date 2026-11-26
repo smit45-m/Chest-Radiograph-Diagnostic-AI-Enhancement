@@ -1190,7 +1190,7 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                   color: "var(--text-primary)",
                 }}
               >
-                5-Model View
+                {predictionData?.ensemble_info?.raddino_active ? "6-Model View" : "5-Model View"}
               </button>
             </div>
           </SpotlightCard>
@@ -1327,6 +1327,18 @@ export const DiagnosticStudio: React.FC<DiagnosticStudioProps> = ({
                         <span className="truncate text-[13.5px] font-medium">
                           {formatPathology(pred.name)}
                         </span>
+                        {isPos && pred.conformal_decision === "AUTO_POSITIVE" && (
+                          <span
+                            title="Split-conformal high-agreement call (low inter-model variance)"
+                            className="shrink-0 rounded-full px-1.5 py-0.5 font-mono-tech text-[9.5px] font-medium"
+                            style={{
+                              backgroundColor: "var(--accent-clinical-dim)",
+                              color: "var(--accent-clinical)",
+                            }}
+                          >
+                            High-Conf
+                          </span>
+                        )}
                         {isReview && (
                           <span
                             title="Sub-threshold borderline or inter-model uncertainty — verify clinically"

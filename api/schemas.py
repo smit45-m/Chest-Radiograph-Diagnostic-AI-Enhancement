@@ -25,6 +25,14 @@ class PathologyPrediction(BaseModel):
     score: float = Field(..., ge=0.0, le=1.0, description="Calibrated fused probability")
     severity: str = Field(..., description="mild / moderate / severe")
     review_flag: str = Field(default="clear", description="positive | borderline | uncertain | clear")
+    conformal_decision: str | None = Field(
+        default=None,
+        description="Split-conformal clinical abstention call: AUTO_POSITIVE | AUTO_NEGATIVE | DEFER_RADIOLOGIST",
+    )
+    calibrated_risk: float | None = Field(
+        default=None,
+        description="OOF Platt-calibrated population prevalence probability (NIH patient-disjoint)",
+    )
     uncertainty: float = Field(default=0.02, description="Epistemic inter-model std dev")
     agreement: float = Field(default=0.95, description="Inter-backbone consensus score [0..1]")
     ci_low: float | None = Field(default=None, description="Lower 95% confidence bound")

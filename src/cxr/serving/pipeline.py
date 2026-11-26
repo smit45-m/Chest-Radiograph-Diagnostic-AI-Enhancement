@@ -199,6 +199,8 @@ class DiagnosisPipeline:
                 "score": round(conf, 4),
                 "severity": severity,
                 "review_flag": review_flag,
+                "conformal_decision": meta.get("conformal_decision"),
+                "calibrated_risk": meta.get("calibrated_risk"),
                 "uncertainty": unc,
                 "agreement": meta.get("agreement", 0.95),
                 "ci_low": meta.get("ci_low", max(0.001, round(conf - 0.04, 4))),
@@ -590,6 +592,8 @@ class DiagnosisPipeline:
                 "tta_enabled": tta,
                 "segmentation_enabled": bool(anatomy),
                 "gemini_decision_active": bool(decision_summary.get("active")),
+                "raddino_active": bool(self.ensemble and self.ensemble.rad_model is not None),
+                "meta_calibrator_active": bool(self.ensemble and self.ensemble.meta_4cnn is not None),
                 "device": str(self.device),
             },
             "timings": {

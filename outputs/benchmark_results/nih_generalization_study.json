@@ -1,0 +1,326 @@
+{
+  "generated_at": "2026-11-26T20:54:23Z",
+  "cohort": {
+    "oof_train_val_images": 2400,
+    "oof_train_val_patients": 820,
+    "held_out_test_images": 600,
+    "held_out_test_patients": 78,
+    "excluded_benchmark_patients": [
+      1,
+      27426
+    ]
+  },
+  "multilabel_full_coverage_test": {
+    "Baseline 1: DenseNet-121 All (0.50)": {
+      "accuracy": 0.783,
+      "precision": 0.1822,
+      "recall": 0.4874,
+      "f1": 0.2652,
+      "micro_roc_auc": 0.7381,
+      "macro_roc_auc": 0.7274,
+      "micro_pr_auc": 0.1749,
+      "macro_pr_auc": 0.2329,
+      "brier": 0.1476
+    },
+    "Baseline 2: v9.0 4-CNN Ensemble (0.50)": {
+      "accuracy": 0.8304,
+      "precision": 0.2526,
+      "recall": 0.5674,
+      "f1": 0.3496,
+      "micro_roc_auc": 0.8063,
+      "macro_roc_auc": 0.7673,
+      "micro_pr_auc": 0.2782,
+      "macro_pr_auc": 0.2834,
+      "brier": 0.1211
+    },
+    "Method 1: RAD-DINO ViT-Base 518px Probe": {
+      "accuracy": 0.8676,
+      "precision": 0.2944,
+      "recall": 0.4637,
+      "f1": 0.3602,
+      "micro_roc_auc": 0.7989,
+      "macro_roc_auc": 0.7438,
+      "micro_pr_auc": 0.281,
+      "macro_pr_auc": 0.2779,
+      "brier": 0.0957
+    },
+    "Method 2A: 4-CNN Co-Occurrence Meta (0.50)": {
+      "accuracy": 0.9229,
+      "precision": 0.5918,
+      "recall": 0.1289,
+      "f1": 0.2117,
+      "micro_roc_auc": 0.8427,
+      "macro_roc_auc": 0.8028,
+      "micro_pr_auc": 0.3697,
+      "macro_pr_auc": 0.3242,
+      "brier": 0.0609
+    },
+    "Method 2A+3: 4-CNN Meta + OOF-F1 Thrs": {
+      "accuracy": 0.8704,
+      "precision": 0.324,
+      "recall": 0.5644,
+      "f1": 0.4117,
+      "micro_roc_auc": 0.8427,
+      "macro_roc_auc": 0.8028,
+      "micro_pr_auc": 0.3697,
+      "macro_pr_auc": 0.3242,
+      "brier": 0.0609
+    },
+    "Method 2B: 5-Vision RAD-DINO Meta (0.50)": {
+      "accuracy": 0.9221,
+      "precision": 0.5724,
+      "recall": 0.123,
+      "f1": 0.2024,
+      "micro_roc_auc": 0.8438,
+      "macro_roc_auc": 0.8058,
+      "micro_pr_auc": 0.3719,
+      "macro_pr_auc": 0.3344,
+      "brier": 0.0607
+    },
+    "Method 2B+3: 5-Vision Meta + OOF-F1 Thrs": {
+      "accuracy": 0.8756,
+      "precision": 0.3339,
+      "recall": 0.5511,
+      "f1": 0.4159,
+      "micro_roc_auc": 0.8438,
+      "macro_roc_auc": 0.8058,
+      "micro_pr_auc": 0.3719,
+      "macro_pr_auc": 0.3344,
+      "brier": 0.0607
+    },
+    "Method 2C: PyTorch Residual MLP + OOF-F1": {
+      "accuracy": 0.8637,
+      "precision": 0.3048,
+      "recall": 0.5437,
+      "f1": 0.3906,
+      "micro_roc_auc": 0.8195,
+      "macro_roc_auc": 0.7789,
+      "micro_pr_auc": 0.3277,
+      "macro_pr_auc": 0.2966,
+      "brier": 0.0641
+    },
+    "Method 2D: Linear+MLP Meta Blend + OOF-F1": {
+      "accuracy": 0.866,
+      "precision": 0.3165,
+      "recall": 0.5763,
+      "f1": 0.4086,
+      "micro_roc_auc": 0.8407,
+      "macro_roc_auc": 0.8028,
+      "micro_pr_auc": 0.366,
+      "macro_pr_auc": 0.3278,
+      "brier": 0.0612
+    }
+  },
+  "multilabel_conformal_selective_test": {
+    "meta_4cnn_target_90": {
+      "tau_low": 0.002,
+      "tau_high": 0.76,
+      "oof_prec": 0.75,
+      "oof_rec": 0.9767,
+      "test_coverage": 0.065,
+      "test_deferred_pct": 93.5,
+      "test_accuracy": 0.9817,
+      "test_precision": 0.7857,
+      "test_recall": 0.8462,
+      "test_npv": 0.9923,
+      "test_f1": 0.8148,
+      "test_confusion": {
+        "tp": 22,
+        "tn": 514,
+        "fp": 6,
+        "fn": 4
+      }
+    },
+    "meta_5vision_target_90": {
+      "tau_low": 0.002,
+      "tau_high": 0.82,
+      "oof_prec": 0.75,
+      "oof_rec": 0.9643,
+      "test_coverage": 0.0636,
+      "test_deferred_pct": 93.64,
+      "test_accuracy": 0.9888,
+      "test_precision": 0.8125,
+      "test_recall": 0.8125,
+      "test_npv": 0.9942,
+      "test_f1": 0.8125,
+      "test_confusion": {
+        "tp": 13,
+        "tn": 515,
+        "fp": 3,
+        "fn": 3
+      }
+    },
+    "meta_5vision_target_80": {
+      "tau_low": 0.002,
+      "tau_high": 0.82,
+      "oof_prec": 0.75,
+      "oof_rec": 0.9643,
+      "test_coverage": 0.0636,
+      "test_deferred_pct": 93.64,
+      "test_accuracy": 0.9888,
+      "test_precision": 0.8125,
+      "test_recall": 0.8125,
+      "test_npv": 0.9942,
+      "test_f1": 0.8125,
+      "test_confusion": {
+        "tp": 13,
+        "tn": 515,
+        "fp": 3,
+        "fn": 3
+      }
+    }
+  },
+  "binary_abnormal_triage_test": {
+    "full_coverage": {
+      "roc_auc": 0.7746,
+      "accuracy": 0.7633,
+      "precision": 0.763,
+      "recall": 0.9141,
+      "f1": 0.8318
+    },
+    "selective_conformal_90": {
+      "tau_low": 0.2,
+      "tau_high": 0.8,
+      "test_coverage": 0.2483,
+      "test_accuracy": 0.8591,
+      "test_precision": 0.8571,
+      "test_recall": 1.0,
+      "test_npv": 1.0,
+      "test_f1": 0.9231,
+      "confusion": {
+        "tp": 126,
+        "tn": 2,
+        "fp": 21,
+        "fn": 0
+      }
+    }
+  },
+  "per_class_test_5vision": [
+    {
+      "pathology": "Atelectasis",
+      "support": 68,
+      "v9_auc": 0.7867,
+      "v10_5vision_auc": 0.8106,
+      "v10_5vision_pr": 0.3286,
+      "meta_blend_alpha": 0.5,
+      "oof_f1_threshold": 0.1719
+    },
+    {
+      "pathology": "Cardiomegaly",
+      "support": 56,
+      "v9_auc": 0.835,
+      "v10_5vision_auc": 0.8421,
+      "v10_5vision_pr": 0.4786,
+      "meta_blend_alpha": 0.5,
+      "oof_f1_threshold": 0.2859
+    },
+    {
+      "pathology": "Effusion",
+      "support": 125,
+      "v9_auc": 0.7999,
+      "v10_5vision_auc": 0.8134,
+      "v10_5vision_pr": 0.5393,
+      "meta_blend_alpha": 0.25,
+      "oof_f1_threshold": 0.2783
+    },
+    {
+      "pathology": "Infiltration",
+      "support": 145,
+      "v9_auc": 0.6983,
+      "v10_5vision_auc": 0.6979,
+      "v10_5vision_pr": 0.3766,
+      "meta_blend_alpha": 0.5,
+      "oof_f1_threshold": 0.2075
+    },
+    {
+      "pathology": "Mass",
+      "support": 29,
+      "v9_auc": 0.6739,
+      "v10_5vision_auc": 0.6758,
+      "v10_5vision_pr": 0.1599,
+      "meta_blend_alpha": 1.0,
+      "oof_f1_threshold": 0.15
+    },
+    {
+      "pathology": "Nodule",
+      "support": 23,
+      "v9_auc": 0.769,
+      "v10_5vision_auc": 0.842,
+      "v10_5vision_pr": 0.3247,
+      "meta_blend_alpha": 0.75,
+      "oof_f1_threshold": 0.1631
+    },
+    {
+      "pathology": "Pneumonia",
+      "support": 13,
+      "v9_auc": 0.6865,
+      "v10_5vision_auc": 0.7076,
+      "v10_5vision_pr": 0.0657,
+      "meta_blend_alpha": 0.5,
+      "oof_f1_threshold": 0.15
+    },
+    {
+      "pathology": "Pneumothorax",
+      "support": 62,
+      "v9_auc": 0.7747,
+      "v10_5vision_auc": 0.9129,
+      "v10_5vision_pr": 0.6102,
+      "meta_blend_alpha": 0.75,
+      "oof_f1_threshold": 0.15
+    },
+    {
+      "pathology": "Consolidation",
+      "support": 45,
+      "v9_auc": 0.7268,
+      "v10_5vision_auc": 0.7268,
+      "v10_5vision_pr": 0.1585,
+      "meta_blend_alpha": 0.0,
+      "oof_f1_threshold": 0.15
+    },
+    {
+      "pathology": "Edema",
+      "support": 34,
+      "v9_auc": 0.79,
+      "v10_5vision_auc": 0.7963,
+      "v10_5vision_pr": 0.1821,
+      "meta_blend_alpha": 0.5,
+      "oof_f1_threshold": 0.15
+    },
+    {
+      "pathology": "Emphysema",
+      "support": 18,
+      "v9_auc": 0.803,
+      "v10_5vision_auc": 0.9115,
+      "v10_5vision_pr": 0.4602,
+      "meta_blend_alpha": 0.75,
+      "oof_f1_threshold": 0.15
+    },
+    {
+      "pathology": "Fibrosis",
+      "support": 10,
+      "v9_auc": 0.7131,
+      "v10_5vision_auc": 0.8512,
+      "v10_5vision_pr": 0.0612,
+      "meta_blend_alpha": 0.75,
+      "oof_f1_threshold": 0.15
+    },
+    {
+      "pathology": "Pleural_Thickening",
+      "support": 37,
+      "v9_auc": 0.7858,
+      "v10_5vision_auc": 0.794,
+      "v10_5vision_pr": 0.2553,
+      "meta_blend_alpha": 0.5,
+      "oof_f1_threshold": 0.15
+    },
+    {
+      "pathology": "Hernia",
+      "support": 10,
+      "v9_auc": 0.8992,
+      "v10_5vision_auc": 0.8992,
+      "v10_5vision_pr": 0.6811,
+      "meta_blend_alpha": 0.0,
+      "oof_f1_threshold": 0.85
+    }
+  ]
+}
